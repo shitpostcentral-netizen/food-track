@@ -1,9 +1,7 @@
-// Import Firebase functions from the CDN
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, limit } 
+import { getFirestore, collection, addDoc, updateDoc, doc, query, orderBy, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// --- PASTE YOUR FIREBASE CONFIG HERE ---
 const firebaseConfig = {
   apiKey: "AIzaSyDp4HDIZxNq9_mibAryJdF839LDofOZyzg",
   authDomain: "food-diary-7293d.firebaseapp.com",
@@ -14,25 +12,47 @@ const firebaseConfig = {
   measurementId: "G-G354M9TDBV"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Global Chart Instances
-let lineChartInstance = null;
-let doughnutChartInstance = null;
+// State
+let allLogs = [];
+let currentView = 'day'; // 'day', 'week', 'month'
 
-// Toggle Form Visibility
-const toggleBtn = document.getElementById('toggleFormBtn');
+// DOM Elements
+const form = document.getElementById('foodForm');
 const formBox = document.getElementById('logForm');
+const toggleBtn = document.getElementById('toggleFormBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+// --- EVENT LISTENERS ---
+
+// 1. Toggle Form
 toggleBtn.addEventListener('click', () => {
+    resetForm();
     formBox.classList.toggle('hidden');
     toggleBtn.textContent = formBox.classList.contains('hidden') ? '+ Log Food' : 'Close';
 });
 
-// Handle Form Submission
-document.getElementById('foodForm').addEventListener('submit', async (e) => {
+// 2. Filter Buttons (Day/Week/Month)
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // Update UI classes
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        
+        // Update Logic
+        currentView = e.target.dataset.view;
+        calculateStats(allLogs);
+    });
+});
+
+// 3. Handle Submit (Create OR Update)
+form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    const editId = document.getElementById('editId').value;
+    const dateVal = document.getElementById('logDate').value; // Get datetime-local value
     
     const entry = {
         name: document.getElementById('foodName').value,
@@ -40,69 +60,140 @@ document.getElementById('foodForm').addEventListener('submit', async (e) => {
         protein: Number(document.getElementById('prot').value),
         carbs: Number(document.getElementById('carb').value),
         fat: Number(document.getElementById('fat').value),
-        img: document.getElementById('imgUrl').value || 'https://placehold.co/400x300?text=No+Image', // Default placeholder
-        date: new Date()
+        img: document.getElementById('imgUrl').value || 'https://placehold.co/400x300?text=No+Image',
+        // Convert input string to actual Date object
+        date: new Date(dateVal) 
     };
 
     try {
-        await addDoc(collection(db, "logs"), entry);
-        alert('Food logged!');
-        document.getElementById('foodForm').reset();
+        if (editId) {
+            // UPDATE existing
+            const docRef = doc(db, "logs", editId);
+            await updateDoc(docRef, entry);
+            alert("Updated successfully!");
+        } else {
+            // CREATE new
+            await addDoc(collection(db, "logs"), entry);
+            alert("Logged successfully!");
+        }
+        
+        resetForm();
         formBox.classList.add('hidden');
+        toggleBtn.textContent = '+ Log Food';
     } catch (err) {
-        console.error("Error adding document: ", err);
+        console.error("Error:", err);
+        alert("Error saving data");
     }
 });
 
-// Real-time Data Listener
-const q = query(collection(db, "logs"), orderBy("date", "desc"), limit(50));
-
-onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    updateDashboard(data);
-    renderFeed(data);
+// 4. Cancel Edit
+cancelEditBtn.addEventListener('click', () => {
+    resetForm();
+    formBox.classList.add('hidden');
 });
 
-// --- CORE FUNCTIONS ---
+// --- REAL-TIME LISTENER ---
 
-function updateDashboard(data) {
-    // 1. Calculate Today's Totals
-    const today = new Date().toDateString();
-    let todayCals = 0;
-    let todayProt = 0;
-    let totalProt = 0, totalCarb = 0, totalFat = 0;
+const q = query(collection(db, "logs"), orderBy("date", "desc"));
 
-    data.forEach(item => {
-        // Convert Firestore timestamp to JS Date
-        const itemDate = item.date.toDate().toDateString();
-        
-        // Sum macros for charts
+onSnapshot(q, (snapshot) => {
+    // 1. Convert docs to easy objects
+    allLogs = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        jsDate: doc.data().date.toDate() // Helper for easy date math
+    }));
+
+    renderFeed(allLogs);
+    renderCalendar(allLogs);
+    calculateStats(allLogs);
+});
+
+// --- FUNCTIONS ---
+
+function calculateStats(data) {
+    const now = new Date();
+    let filtered = [];
+    let title = "";
+
+    // Filter Logic
+    if (currentView === 'day') {
+        title = "Today's Totals";
+        filtered = data.filter(item => isSameDay(item.jsDate, now));
+    } else if (currentView === 'week') {
+        title = "This Week's Totals";
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(now.getDate() - 7);
+        filtered = data.filter(item => item.jsDate >= oneWeekAgo);
+    } else if (currentView === 'month') {
+        title = "This Month's Totals";
+        filtered = data.filter(item => 
+            item.jsDate.getMonth() === now.getMonth() && 
+            item.jsDate.getFullYear() === now.getFullYear()
+        );
+    }
+
+    // Calculations
+    let totalCals = 0;
+    let totalProt = 0;
+    const uniqueDays = new Set(filtered.map(i => i.jsDate.toDateString())).size || 1;
+
+    filtered.forEach(item => {
+        totalCals += item.cals;
         totalProt += item.protein;
-        totalCarb += item.carbs;
-        totalFat += item.fat;
-
-        // Sum for Today's display
-        if (itemDate === today) {
-            todayCals += item.cals;
-            todayProt += item.protein;
-        }
     });
 
-    document.getElementById('displayCals').innerText = todayCals;
-    document.getElementById('displayProt').innerText = todayProt;
+    // Update UI
+    document.getElementById('statTitle').innerText = title;
+    document.getElementById('displayCals').innerText = totalCals.toLocaleString();
+    document.getElementById('displayProt').innerText = totalProt.toLocaleString();
+    
+    // Averages
+    document.getElementById('displayAvgCals').innerText = Math.round(totalCals / uniqueDays);
+    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / uniqueDays);
+}
 
-    // 2. Render Charts
-    renderLineChart(data);
-    renderDoughnut(totalProt, totalCarb, totalFat);
-    renderHeatmap(data);
+function renderCalendar(data) {
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+
+    // Get number of days in current month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Create Map of DateString -> Total Cals
+    const dailyTotals = {};
+    data.forEach(item => {
+        const dateKey = item.jsDate.toDateString();
+        if (!dailyTotals[dateKey]) dailyTotals[dateKey] = 0;
+        dailyTotals[dateKey] += item.cals;
+    });
+
+    // Generate Boxes
+    for (let i = 1; i <= daysInMonth; i++) {
+        const thisDate = new Date(year, month, i);
+        const dateKey = thisDate.toDateString();
+        const total = dailyTotals[dateKey] || 0;
+
+        const cell = document.createElement('div');
+        cell.className = total > 0 ? 'cal-day has-data' : 'cal-day';
+        
+        cell.innerHTML = `
+            <span class="cal-date">${i}</span>
+            ${total > 0 ? `<div class="cal-total">${total}</div>` : ''}
+        `;
+        grid.appendChild(cell);
+    }
 }
 
 function renderFeed(data) {
     const feed = document.getElementById('feed');
-    feed.innerHTML = ''; // Clear current feed
+    feed.innerHTML = '';
 
     data.forEach(item => {
-        const dateObj = item.date.toDate();
         const card = document.createElement('div');
         card.className = 'food-card';
         card.innerHTML = `
@@ -114,80 +205,58 @@ function renderFeed(data) {
                     <span>P: ${item.protein}g</span>
                 </div>
                 <div style="font-size: 0.7em; color: #999; margin-top:5px;">
-                    ${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    ${item.jsDate.toLocaleDateString()} ${item.jsDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                 </div>
+                <button class="edit-btn" onclick="triggerEdit('${item.id}')">Edit</button>
             </div>
         `;
         feed.appendChild(card);
     });
 }
 
-// --- CHART LOGIC ---
+// Global function for Edit button (needs window scope)
+window.triggerEdit = (id) => {
+    const item = allLogs.find(log => log.id === id);
+    if (!item) return;
 
-function renderLineChart(data) {
-    const ctx = document.getElementById('lineChart').getContext('2d');
+    // Fill Form
+    document.getElementById('editId').value = item.id;
+    document.getElementById('foodName').value = item.name;
+    document.getElementById('cals').value = item.cals;
+    document.getElementById('prot').value = item.protein;
+    document.getElementById('carb').value = item.carbs;
+    document.getElementById('fat').value = item.fat;
+    document.getElementById('imgUrl').value = item.img;
     
-    // Reverse data to show oldest to newest left-to-right
-    const chartData = [...data].reverse(); 
+    // Format date for datetime-local (YYYY-MM-DDTHH:MM)
+    const isoString = item.jsDate.toISOString(); 
+    document.getElementById('logDate').value = isoString.substring(0, 16); // Cut off seconds
+
+    // UI Changes
+    document.getElementById('formTitle').innerText = "Edit Entry";
+    document.getElementById('saveBtn').innerText = "Update Entry";
+    document.getElementById('cancelEditBtn').classList.remove('hidden');
+    formBox.classList.remove('hidden');
     
-    const labels = chartData.map(d => d.date.toDate().toLocaleDateString());
-    const cals = chartData.map(d => d.cals);
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
-    if (lineChartInstance) lineChartInstance.destroy();
-
-    lineChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Calories',
-                data: cals,
-                borderColor: '#4f46e5',
-                tension: 0.4,
-                fill: true,
-                backgroundColor: 'rgba(79, 70, 229, 0.1)'
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
+function resetForm() {
+    form.reset();
+    document.getElementById('editId').value = "";
+    document.getElementById('formTitle').innerText = "Add Entry";
+    document.getElementById('saveBtn').innerText = "Save Entry";
+    document.getElementById('cancelEditBtn').classList.add('hidden');
+    
+    // Default Date to Now
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('logDate').value = now.toISOString().slice(0,16);
 }
 
-function renderDoughnut(p, c, f) {
-    const ctx = document.getElementById('doughnutChart').getContext('2d');
-    
-    if (doughnutChartInstance) doughnutChartInstance.destroy();
-
-    doughnutChartInstance = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Protein', 'Carbs', 'Fat'],
-            datasets: [{
-                data: [p, c, f],
-                backgroundColor: ['#36A2EB', '#FF6384', '#FFCE56']
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
-}
-
-function renderHeatmap(data) {
-    const container = document.getElementById('heatmap');
-    container.innerHTML = '';
-    
-    // Create 30 boxes
-    for (let i = 29; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toDateString();
-        
-        const box = document.createElement('div');
-        box.className = 'heat-day';
-        
-        // Check if we logged food on this date
-        const hasLog = data.some(item => item.date.toDate().toDateString() === dateStr);
-        if (hasLog) box.classList.add('heat-active');
-        
-        box.title = dateStr; // Hover tooltip
-        container.appendChild(box);
-    }
+function isSameDay(d1, d2) {
+    return d1.getDate() === d2.getDate() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getFullYear() === d2.getFullYear();
 }

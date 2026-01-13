@@ -130,3 +130,66 @@ input {
     .bento-grid { grid-template-columns: 1fr; }
     .wide { grid-column: span 1; }
 }
+
+/* --- New Additions --- */
+
+/* Stats Controls */
+.stats-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.filter-btn {
+    background: white;
+    color: #555;
+    flex: 1;
+    border: 1px solid #ddd;
+}
+.filter-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* Calendar Grid */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr); /* 7 Days a week */
+    gap: 8px;
+    margin-top: 15px;
+}
+.cal-day {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 8px;
+    min-height: 60px;
+    font-size: 0.8rem;
+    position: relative;
+    border: 1px solid #eee;
+}
+.cal-day.has-data {
+    background: #e0e7ff; /* Light Indigo */
+    border-color: #c7d2fe;
+}
+.cal-date {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+.cal-total {
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 0.9rem;
+}
+
+/* Edit Button in Feed */
+.edit-btn {
+    background: #eee;
+    color: #333;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    margin-top: 10px;
+    width: 100%;
+    border-radius: 6px;
+}
+.edit-btn:hover { background: #ddd; }
