@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bento Food Diary</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <header class="bento-box header">
+            <h1>🍱 My Food Diary</h1>
+            <button id="toggleFormBtn">+ Log Food</button>
+        </header>
+
+        <div id="logForm" class="bento-box form-box hidden">
+            <h2>Add Entry</h2>
+            <form id="foodForm">
+                <input type="text" id="foodName" placeholder="What did you eat?" required>
+                <div class="input-row">
+                    <input type="number" id="cals" placeholder="Calories" required>
+                    <input type="number" id="prot" placeholder="Protein (g)" required>
+                </div>
+                <div class="input-row">
+                    <input type="number" id="carb" placeholder="Carbs (g)" required>
+                    <input type="number" id="fat" placeholder="Fat (g)" required>
+                </div>
+                <input type="url" id="imgUrl" placeholder="Image URL (Imgur/Discord link)">
+                <button type="submit">Save Entry</button>
+            </form>
+        </div>
+
+        <div class="bento-grid">
+            <div class="bento-box stat-card highlight">
+                <h3>Today's Calories</h3>
+                <span id="displayCals" class="big-number">0</span>
+                <small>kcal</small>
+            </div>
+            <div class="bento-box stat-card">
+                <h3>Protein</h3>
+                <span id="displayProt" class="big-number">0</span>
+                <small>grams</small>
+            </div>
+
+            <div class="bento-box chart-container wide">
+                <h3>Calorie Trend (Last 7 Entries)</h3>
+                <canvas id="lineChart"></canvas>
+            </div>
+            <div class="bento-box chart-container square">
+                <h3>Macro Split</h3>
+                <canvas id="doughnutChart"></canvas>
+            </div>
+            
+             <div class="bento-box heatmap-container wide">
+                <h3>Consistency (Last 30 Days)</h3>
+                <div id="heatmap" class="heatmap-grid"></div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Recent Eats</h2>
+        <div id="feed" class="feed-grid">
+            </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
