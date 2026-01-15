@@ -153,18 +153,33 @@ function calculateStats(data) {
     document.getElementById('displayAvgProt').innerText = Math.round(totalProt / uniqueDays);
 }
 
+// Replace the old renderCalendar with this:
 function renderCalendar(data) {
     const grid = document.getElementById('calendarGrid');
     grid.innerHTML = '';
 
     const today = new Date();
     const year = today.getFullYear();
-    const month = today.getMonth();
+    const month = today.getMonth(); // 0 = Jan, 1 = Feb...
 
-    // Get number of days in current month
+    // 1. Add Header Row (S M T W T F S)
+    const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    days.forEach(d => {
+        const header = document.createElement('div');
+        header.style.fontWeight = 'bold';
+        header.style.textAlign = 'center';
+        header.style.color = '#888';
+        header.style.fontSize = '0.8rem';
+        header.innerText = d;
+        grid.appendChild(header);
+    });
+
+    // 2. Calculate padding
+    // new Date(year, month, 1).getDay() gives us the weekday of the 1st (0=Sun, 1=Mon...)
+    const firstDayIndex = new Date(year, month, 1).getDay(); 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Create Map of DateString -> Total Cals
+    // 3. Totals Map
     const dailyTotals = {};
     data.forEach(item => {
         const dateKey = item.jsDate.toDateString();
@@ -172,15 +187,24 @@ function renderCalendar(data) {
         dailyTotals[dateKey] += item.cals;
     });
 
-    // Generate Boxes
+    // 4. Create Empty Placeholders (for days before the 1st)
+    for (let i = 0; i < firstDayIndex; i++) {
+        const empty = document.createElement('div');
+        grid.appendChild(empty);
+    }
+
+    // 5. Create Actual Days
     for (let i = 1; i <= daysInMonth; i++) {
         const thisDate = new Date(year, month, i);
         const dateKey = thisDate.toDateString();
         const total = dailyTotals[dateKey] || 0;
+        const isToday = thisDate.toDateString() === today.toDateString();
 
         const cell = document.createElement('div');
+        // Add specific class if it's today
         cell.className = total > 0 ? 'cal-day has-data' : 'cal-day';
-        
+        if (isToday) cell.style.border = "2px solid var(--accent)";
+
         cell.innerHTML = `
             <span class="cal-date">${i}</span>
             ${total > 0 ? `<div class="cal-total">${total}</div>` : ''}
@@ -215,6 +239,7 @@ function renderFeed(data) {
 }
 
 // Global function for Edit button (needs window scope)
+// Replace the old window.triggerEdit with this:
 window.triggerEdit = (id) => {
     const item = allLogs.find(log => log.id === id);
     if (!item) return;
@@ -228,9 +253,14 @@ window.triggerEdit = (id) => {
     document.getElementById('fat').value = item.fat;
     document.getElementById('imgUrl').value = item.img;
     
-    // Format date for datetime-local (YYYY-MM-DDTHH:MM)
-    const isoString = item.jsDate.toISOString(); 
-    document.getElementById('logDate').value = isoString.substring(0, 16); // Cut off seconds
+    // --- THE FIX ---
+    // 1. Get the raw date object
+    const date = item.jsDate;
+    // 2. Adjust for your local timezone offset (in minutes)
+    // This creates a "fake" date that looks right when converted to ISO string
+    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+    // 3. Cut off the seconds/milliseconds
+    document.getElementById('logDate').value = localDate.toISOString().slice(0, 16); 
 
     // UI Changes
     document.getElementById('formTitle').innerText = "Edit Entry";
@@ -238,7 +268,6 @@ window.triggerEdit = (id) => {
     document.getElementById('cancelEditBtn').classList.remove('hidden');
     formBox.classList.remove('hidden');
     
-    // Scroll to form
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
@@ -259,4 +288,5 @@ function isSameDay(d1, d2) {
     return d1.getDate() === d2.getDate() &&
            d1.getMonth() === d2.getMonth() &&
            d1.getFullYear() === d2.getFullYear();
+
 }
