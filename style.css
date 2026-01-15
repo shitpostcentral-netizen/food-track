@@ -45,6 +45,12 @@ body {
     margin-bottom: 15px;
 }
 
+.cal-sub {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 2px;
+}
+
 button {
     background: var(--accent);
     color: white;
@@ -192,4 +198,5 @@ input {
     width: 100%;
     border-radius: 6px;
 }
+
 .edit-btn:hover { background: #ddd; }
