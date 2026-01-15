@@ -153,16 +153,15 @@ function calculateStats(data) {
     document.getElementById('displayAvgProt').innerText = Math.round(totalProt / uniqueDays);
 }
 
-// Replace the old renderCalendar with this:
 function renderCalendar(data) {
     const grid = document.getElementById('calendarGrid');
     grid.innerHTML = '';
 
     const today = new Date();
     const year = today.getFullYear();
-    const month = today.getMonth(); // 0 = Jan, 1 = Feb...
+    const month = today.getMonth(); 
 
-    // 1. Add Header Row (S M T W T F S)
+    // 1. Headers
     const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     days.forEach(d => {
         const header = document.createElement('div');
@@ -174,40 +173,42 @@ function renderCalendar(data) {
         grid.appendChild(header);
     });
 
-    // 2. Calculate padding
-    // new Date(year, month, 1).getDay() gives us the weekday of the 1st (0=Sun, 1=Mon...)
+    // 2. Padding & Days calculation
     const firstDayIndex = new Date(year, month, 1).getDay(); 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // 3. Totals Map
+    // 3. Totals Map (Now tracks an object {cals, prot} instead of just cals)
     const dailyTotals = {};
     data.forEach(item => {
         const dateKey = item.jsDate.toDateString();
-        if (!dailyTotals[dateKey]) dailyTotals[dateKey] = 0;
-        dailyTotals[dateKey] += item.cals;
+        if (!dailyTotals[dateKey]) dailyTotals[dateKey] = { cals: 0, prot: 0 };
+        dailyTotals[dateKey].cals += item.cals;
+        dailyTotals[dateKey].prot += item.protein;
     });
 
-    // 4. Create Empty Placeholders (for days before the 1st)
+    // 4. Empty Placeholders
     for (let i = 0; i < firstDayIndex; i++) {
         const empty = document.createElement('div');
         grid.appendChild(empty);
     }
 
-    // 5. Create Actual Days
+    // 5. Render Days
     for (let i = 1; i <= daysInMonth; i++) {
         const thisDate = new Date(year, month, i);
         const dateKey = thisDate.toDateString();
-        const total = dailyTotals[dateKey] || 0;
+        const dayData = dailyTotals[dateKey] || { cals: 0, prot: 0 };
         const isToday = thisDate.toDateString() === today.toDateString();
 
         const cell = document.createElement('div');
-        // Add specific class if it's today
-        cell.className = total > 0 ? 'cal-day has-data' : 'cal-day';
+        cell.className = dayData.cals > 0 ? 'cal-day has-data' : 'cal-day';
         if (isToday) cell.style.border = "2px solid var(--accent)";
 
         cell.innerHTML = `
             <span class="cal-date">${i}</span>
-            ${total > 0 ? `<div class="cal-total">${total}</div>` : ''}
+            ${dayData.cals > 0 ? `
+                <div class="cal-total">${dayData.cals}</div>
+                <div class="cal-sub">P: ${dayData.prot}g</div>
+            ` : ''}
         `;
         grid.appendChild(cell);
     }
@@ -289,4 +290,95 @@ function isSameDay(d1, d2) {
            d1.getMonth() === d2.getMonth() &&
            d1.getFullYear() === d2.getFullYear();
 
+}
+
+// --- NEW VARIABLES ---
+const mainDash = document.getElementById('mainDashboard');
+const statsDash = document.getElementById('statsDashboard');
+const showStatsBtn = document.getElementById('showStatsBtn');
+const backBtn = document.getElementById('backBtn');
+
+// --- NAVIGATION LISTENERS ---
+showStatsBtn.addEventListener('click', () => {
+    mainDash.classList.add('hidden');
+    statsDash.classList.remove('hidden');
+    calculateCoolStats(allLogs); // Calculate only when we open the page
+});
+
+backBtn.addEventListener('click', () => {
+    statsDash.classList.add('hidden');
+    mainDash.classList.remove('hidden');
+});
+
+// --- THE FUN LOGIC ---
+function calculateCoolStats(data) {
+    if (data.length === 0) return;
+
+    // 1. Lifetime Totals
+    let totalCals = 0;
+    let totalProt = 0;
+    
+    // 2. Frequency Map (for Top Foods)
+    const foodCounts = {};
+    
+    // 3. Daily Aggregates (for Records)
+    const dailySums = {};
+
+    data.forEach(item => {
+        // Lifetime
+        totalCals += item.cals;
+        totalProt += item.protein;
+
+        // Count Foods (normalize to lowercase so "Egg" and "egg" are the same)
+        const name = item.name.trim().toLowerCase();
+        foodCounts[name] = (foodCounts[name] || 0) + 1;
+
+        // Daily Sums
+        const dateKey = item.jsDate.toDateString();
+        if (!dailySums[dateKey]) dailySums[dateKey] = { cals: 0, prot: 0, date: dateKey };
+        dailySums[dateKey].cals += item.cals;
+        dailySums[dateKey].prot += item.protein;
+    });
+
+    // --- DISPLAY LIFETIME ---
+    document.getElementById('lifeCals').innerText = totalCals.toLocaleString();
+    document.getElementById('lifeProt').innerText = totalProt.toLocaleString();
+    document.getElementById('lifeLogs').innerText = data.length;
+
+    // --- FIND RECORDS ---
+    const days = Object.values(dailySums);
+    // Sort by cals descending
+    days.sort((a, b) => b.cals - a.cals);
+    if (days.length > 0) {
+        document.getElementById('statMaxCals').innerText = days[0].cals;
+        document.getElementById('statMaxCalsDate').innerText = days[0].date;
+    }
+
+    // Sort by protein descending
+    days.sort((a, b) => b.prot - a.prot);
+    if (days.length > 0) {
+        document.getElementById('statMaxProt').innerText = days[0].prot;
+    }
+
+    // --- TOP FOODS LIST ---
+    // Convert object to array -> sort by count -> take top 5
+    const sortedFoods = Object.entries(foodCounts)
+        .sort((a, b) => b[1] - a[1]) // Sort by count (highest first)
+        .slice(0, 5);
+
+    const list = document.getElementById('topFoodsList');
+    list.innerHTML = '';
+    
+    sortedFoods.forEach(([name, count]) => {
+        const li = document.createElement('li');
+        li.style.padding = "8px 0";
+        li.style.borderBottom = "1px solid #eee";
+        li.style.display = "flex";
+        li.style.justifyContent = "space-between";
+        // Capitalize first letter
+        const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+        
+        li.innerHTML = `<span>${displayName}</span> <span style="font-weight:bold; color:var(--accent);">${count}x</span>`;
+        list.appendChild(li);
+    });
 }
