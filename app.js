@@ -2,9 +2,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, updateDoc, doc, query, orderBy, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// --- PASTE FIREBASE CONFIG HERE ---
 const firebaseConfig = {
-    // ... your keys ...
+  apiKey: "AIzaSyDp4HDIZxNq9_mibAryJdF839LDofOZyzg",
+  authDomain: "food-diary-7293d.firebaseapp.com",
+  projectId: "food-diary-7293d",
+  storageBucket: "food-diary-7293d.firebasestorage.app",
+  messagingSenderId: "745034715166",
+  appId: "1:745034715166:web:cab03295882e17cc3b1e0f",
+  measurementId: "G-G354M9TDBV"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -374,3 +379,4 @@ function calculateCoolStats(data) {
         list.appendChild(li);
     });
 }
+
