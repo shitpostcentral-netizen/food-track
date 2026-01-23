@@ -200,3 +200,43 @@ input {
 }
 
 .edit-btn:hover { background: #ddd; }
+
+/* Calendar Header */
+.cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.cal-nav {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.cal-nav:hover { background: #f0f0f0; }
+
+/* Interactive Calendar Days */
+.cal-day {
+    cursor: pointer; /* Shows it is clickable */
+    transition: transform 0.1s;
+}
+.cal-day:hover {
+    transform: scale(1.05);
+    background: #f0fdf4; /* Very light green on hover */
+}
+
+/* Selected State */
+.cal-day.selected-day {
+    border: 2px solid var(--accent) !important;
+    background: #eef2ff !important;
+}
+
+/* Make the Est Weight Card look distinct */
+.stat-card small { display: block; margin-top: 5px; color: #666; }
