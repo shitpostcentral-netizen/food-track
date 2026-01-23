@@ -121,9 +121,8 @@ function calculateStats(data) {
     let title = "";
     let isDayView = false;
 
-    // Filtering Logic
+    // 1. FILTERING LOGIC
     if (currentView === 'day') {
-        // Use selectedFilterDate instead of "now"
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
         isDayView = true;
@@ -138,44 +137,54 @@ function calculateStats(data) {
             item.jsDate.getMonth() === now.getMonth() && 
             item.jsDate.getFullYear() === now.getFullYear()
         );
+    } else if (currentView === 'all') {
+        title = "All Time";
+        filtered = data; // Show everything
     }
 
-    // Calculations
+    // 2. MACRO CALCULATIONS
     let totalCals = 0;
     let totalProt = 0;
-    const uniqueDays = new Set(filtered.map(i => i.jsDate.toDateString())).size || 1;
+    
+    // Count unique days in this filter (to calculate averages & weight correctly)
+    const uniqueDaysSet = new Set(filtered.map(i => i.jsDate.toDateString()));
+    const uniqueDaysCount = uniqueDaysSet.size || 1; 
 
     filtered.forEach(item => {
         totalCals += item.cals;
         totalProt += item.protein;
     });
 
-    // Render Stats
+    // 3. UPDATE STAT CARDS
     document.getElementById('statTitle').innerText = isDayView ? "Selected Day Cals" : title;
     document.getElementById('displayCals').innerText = totalCals.toLocaleString();
     document.getElementById('displayProt').innerText = totalProt.toLocaleString();
-    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / uniqueDays);
+    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / uniqueDaysCount);
 
-    // --- WEIGHT ESTIMATION LOGIC ---
+    // 4. WEIGHT ESTIMATION LOGIC (UPDATED)
     const weightEl = document.getElementById('displayWeightChange');
     
-    if (isDayView) {
-        // TDEE Formula: (Maintenance - Intake) / 3500
-        const deficit = TDEE - totalCals;
-        // Negative lbs means weight loss (good), Positive means gain
-        const lbsChange = -(deficit / 3500); 
-        
+    // Calculate Maintenance Cals for the days tracked (TDEE * Days Logged)
+    const maintenanceCals = TDEE * uniqueDaysCount;
+    
+    // The Deficit = Maintenance - What you actually ate
+    const deficit = maintenanceCals - totalCals;
+    
+    // Convert deficit to lbs (1 lb = 3500 kcal)
+    // We multiply by -1 because positive weight change means GAIN (bad deficit)
+    const lbsChange = -(deficit / 3500); 
+
+    if (filtered.length > 0) {
         const sign = lbsChange > 0 ? "+" : "";
         weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
-        weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669"; // Red if gain, Green if loss
-        
-        // Update Feed to show only this day
-        renderFeed(filtered); 
+        weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669"; // Red=Gain, Green=Loss
     } else {
         weightEl.innerText = "--";
         weightEl.style.color = "#999";
-        renderFeed(allLogs); // Show all in other views
     }
+
+    // 5. RENDER FEED
+    renderFeed(filtered);
 }
 
 function renderCalendar(data) {
@@ -378,5 +387,6 @@ function calculateCoolStats(data) {
         list.appendChild(li);
     });
 }
+
 
 
