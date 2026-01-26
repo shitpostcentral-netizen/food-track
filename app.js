@@ -132,9 +132,21 @@ function calculateStats(data) {
     let filtered = [];
     let title = "";
     let isDayView = false;
+    
+    // 1. DETERMINE HOW LONG THE USER HAS BEEN TRACKING
+    // We need this to prevent the "Jan 1st" bug.
+    let daysSinceStart = 1;
+    if (data.length > 0) {
+        // data is sorted newest-first, so the LAST item is the OLDEST log
+        const firstDate = data[data.length - 1].jsDate;
+        const diffTime = Math.abs(now - firstDate);
+        // Convert ms to days (ceil rounds up partial days)
+        daysSinceStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    }
+
+    // 2. FILTERING & TIME PERIOD LOGIC
     let daysInPeriod = 1;
 
-    // FILTERING LOGIC
     if (currentView === 'day') {
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
@@ -145,27 +157,31 @@ function calculateStats(data) {
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(now.getDate() - 7);
         filtered = data.filter(item => item.jsDate >= oneWeekAgo);
-        daysInPeriod = 7;
+        
+        // FIX: Use 7 days, OR fewer if you started tracking less than 7 days ago
+        daysInPeriod = Math.min(7, daysSinceStart); 
+        
     } else if (currentView === 'month') {
         title = "This Month";
         filtered = data.filter(item => 
             item.jsDate.getMonth() === now.getMonth() && 
             item.jsDate.getFullYear() === now.getFullYear()
         );
-        daysInPeriod = now.getDate(); 
+        
+        // FIX: Use today's date (e.g., 26th), OR fewer if you started recently
+        daysInPeriod = Math.min(now.getDate(), daysSinceStart);
+        
     } else if (currentView === 'all') {
         title = "All Time";
         filtered = data;
-        if (data.length > 0) {
-            const firstDate = data[data.length - 1].jsDate;
-            const diffTime = Math.abs(now - firstDate);
-            daysInPeriod = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-        }
+        daysInPeriod = daysSinceStart;
     }
 
-    // CALCULATIONS
+    // 3. CALCULATE TOTALS
     let totalCals = 0;
     let totalProt = 0;
+    
+    // Count days actually logged (for average calculation)
     const uniqueDaysLogged = new Set(filtered.map(i => i.jsDate.toDateString())).size || 1; 
 
     filtered.forEach(item => {
@@ -173,13 +189,16 @@ function calculateStats(data) {
         totalProt += item.protein;
     });
 
+    // 4. UPDATE STAT CARDS
     document.getElementById('statTitle').innerText = isDayView ? "Selected Day Cals" : title;
     document.getElementById('displayCals').innerText = totalCals.toLocaleString();
     document.getElementById('displayProt').innerText = totalProt.toLocaleString();
     document.getElementById('displayAvgProt').innerText = Math.round(totalProt / (uniqueDaysLogged || 1));
 
-    // WEIGHT LOGIC
+    // 5. WEIGHT ESTIMATION LOGIC
     const weightEl = document.getElementById('displayWeightChange');
+    
+    // TDEE * Real Days Passed
     const totalMaintenanceNeeded = TDEE * daysInPeriod;
     const deficit = totalMaintenanceNeeded - totalCals;
     const lbsChange = -(deficit / 3500); 
@@ -431,3 +450,4 @@ function calculateCoolStats(data) {
         list.appendChild(li);
     });
 }
+
