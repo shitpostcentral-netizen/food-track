@@ -16,6 +16,17 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// --- ADMIN CHECK (Read-Only Mode) ---
+const urlParams = new URLSearchParams(window.location.search);
+const isAdmin = urlParams.get('mode') === 'admin';
+
+if (!isAdmin) {
+    document.body.classList.add('read-only');
+    console.log("View-Only Mode Active");
+} else {
+    console.log("Admin Mode Active");
+}
+
 // --- STATE ---
 let allLogs = [];
 let currentView = 'day'; // 'day', 'week', 'month', 'all'
@@ -177,7 +188,7 @@ function calculateStats(data) {
     weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
     weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669"; 
     
-    // Only filter the feed if we are NOT in 'all' or 'month' view (optional preference, usually nicer to see feed match stats)
+    // Render the feed
     renderFeed(filtered);
 }
 
