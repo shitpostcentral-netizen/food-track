@@ -21,9 +21,9 @@
         <div id="logForm" class="bento-box form-box hidden">
             <h2 id="formTitle">Add Entry</h2>
             <form id="foodForm">
-                <input type="hidden" id="editId">
-                <label>When?</label>
+                <input type="hidden" id="editId"> <label>When?</label>
                 <input type="datetime-local" id="logDate" required>
+
                 <input type="text" id="foodName" placeholder="What did you eat?" required>
                 <div class="input-row">
                     <input type="number" id="cals" placeholder="Calories" required>
@@ -34,6 +34,7 @@
                     <input type="number" id="fat" placeholder="Fat (g)" required>
                 </div>
                 <input type="url" id="imgUrl" placeholder="Image URL (Imgur link)">
+                
                 <div class="form-actions">
                     <button type="submit" id="saveBtn">Save Entry</button>
                     <button type="button" id="cancelEditBtn" class="hidden" style="background:#888;">Cancel</button>
@@ -43,12 +44,12 @@
 
         <div id="mainDashboard">
             
-<div class="stats-controls">
-    <button id="dayFilterBtn" class="filter-btn active" data-view="day">Day View</button>
-    <button class="filter-btn" data-view="week">This Week</button>
-    <button class="filter-btn" data-view="month">This Month</button>
-    <button class="filter-btn" data-view="all">Show All</button>
-</div>
+            <div class="stats-controls">
+                <button id="dayFilterBtn" class="filter-btn active" data-view="day">Day View</button>
+                <button class="filter-btn" data-view="week">This Week</button>
+                <button class="filter-btn" data-view="month">This Month</button>
+                <button class="filter-btn" data-view="all">Show All</button>
+            </div>
 
             <div class="bento-grid">
                 <div class="bento-box stat-card highlight">
@@ -79,8 +80,8 @@
                         <h3 id="calMonthName" style="margin:0;">Month Year</h3>
                         <button id="nextMonth" class="cal-nav">&gt;</button>
                     </div>
-                    
-                    <div id="calendarGrid" class="calendar-grid"></div>
+                    <div id="calendarGrid" class="calendar-grid">
+                        </div>
                 </div>
             </div>
 
@@ -90,27 +91,40 @@
 
         <div id="statsDashboard" class="hidden">
             <button id="backBtn" style="margin-bottom:20px; padding: 10px 15px; background: #ddd; border:none; border-radius:8px; cursor:pointer;">← Back to Diary</button>
+            
             <div class="bento-grid">
                 <div class="bento-box stat-card">
                     <h3>Biggest Eater Day</h3>
                     <span id="statMaxCals" class="big-number">0</span>
                     <small id="statMaxCalsDate">No data</small>
                 </div>
+                
                 <div class="bento-box stat-card">
                     <h3>Protein Record</h3>
                     <span id="statMaxProt" class="big-number">0</span>
                     <small>grams in one day</small>
                 </div>
+
                 <div class="bento-box wide">
-                    <h3>Top Cravings</h3>
+                    <h3>Top Cravings (Click to Add)</h3>
                     <ul id="topFoodsList" style="list-style:none; padding:0; margin-top:10px;"></ul>
                 </div>
+
                 <div class="bento-box wide">
                     <h3>Lifetime Totals</h3>
                     <div style="display:flex; justify-content:space-around; text-align:center; margin-top:10px;">
-                        <div><span id="lifeCals" class="big-number">0</span><br><small>Calories</small></div>
-                        <div><span id="lifeProt" class="big-number">0</span><br><small>Protein</small></div>
-                        <div><span id="lifeLogs" class="big-number">0</span><br><small>Entries</small></div>
+                        <div>
+                            <span id="lifeCals" style="font-size:1.5rem; font-weight:bold; color:var(--accent);">0</span>
+                            <br><small>Calories</small>
+                        </div>
+                        <div>
+                            <span id="lifeProt" style="font-size:1.5rem; font-weight:bold; color:var(--accent);">0</span>
+                            <br><small>Protein</small>
+                        </div>
+                        <div>
+                            <span id="lifeLogs" style="font-size:1.5rem; font-weight:bold; color:var(--accent);">0</span>
+                            <br><small>Entries</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -121,4 +135,3 @@
     <script type="module" src="app.js"></script>
 </body>
 </html>
-
