@@ -1,14 +1,16 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, doc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, doc, query, orderBy, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// --- CLEAN CONFIG ---
 const firebaseConfig = {
-  apiKey: "AIzaSyDp4HDIZxNq9_mibAryJdF839LDofOZyzg",
-  authDomain: "food-diary-7293d.firebaseapp.com",
-  projectId: "food-diary-7293d",
-  storageBucket: "food-diary-7293d.firebasestorage.app",
-  messagingSenderId: "745034715166",
-  appId: "1:745034715166:web:cab03295882e17cc3b1e0f",
-  measurementId: "G-G354M9TDBV"
+    apiKey: "AIzaSyDp4HDIZxNq9_mibAryJdF839LDofOZyzg",
+    authDomain: "food-diary-7293d.firebaseapp.com",
+    projectId: "food-diary-7293d",
+    storageBucket: "food-diary-7293d.firebasestorage.app",
+    messagingSenderId: "745034715166",
+    appId: "1:745034715166:web:cab03295882e17cc3b1e0f",
+    measurementId: "G-G354M9TDBV"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -16,14 +18,14 @@ const db = getFirestore(app);
 
 // --- STATE ---
 let allLogs = [];
-let currentView = 'day'; // 'day', 'week', 'month'
+let currentView = 'day'; // 'day', 'week', 'month', 'all'
 
 // Calendar State
 let viewDate = new Date(); // The month currently visible on calendar
 let selectedFilterDate = new Date(); // The specific day selected for stats
 
 // YOUR STATS
-const TDEE = 2460; // Maintenance Calories
+const TDEE = 2460; 
 
 // DOM ELEMENTS
 const form = document.getElementById('foodForm');
@@ -49,7 +51,6 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
         e.target.classList.add('active');
         currentView = e.target.dataset.view;
         
-        // If they click "Day View" button manually, reset to Today
         if (currentView === 'day') selectedFilterDate = new Date();
         
         calculateStats(allLogs);
@@ -108,7 +109,7 @@ onSnapshot(q, (snapshot) => {
         jsDate: doc.data().date.toDate() 
     }));
 
-    renderFeed(allLogs); // Initial render
+    renderFeed(allLogs); 
     renderCalendar(allLogs);
     calculateStats(allLogs);
 });
@@ -120,70 +121,63 @@ function calculateStats(data) {
     let filtered = [];
     let title = "";
     let isDayView = false;
+    let daysInPeriod = 1;
 
-    // 1. FILTERING LOGIC
+    // FILTERING LOGIC
     if (currentView === 'day') {
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
         isDayView = true;
+        daysInPeriod = 1;
     } else if (currentView === 'week') {
         title = "This Week";
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(now.getDate() - 7);
         filtered = data.filter(item => item.jsDate >= oneWeekAgo);
+        daysInPeriod = 7;
     } else if (currentView === 'month') {
         title = "This Month";
         filtered = data.filter(item => 
             item.jsDate.getMonth() === now.getMonth() && 
             item.jsDate.getFullYear() === now.getFullYear()
         );
+        daysInPeriod = now.getDate(); 
     } else if (currentView === 'all') {
         title = "All Time";
-        filtered = data; // Show everything
+        filtered = data;
+        if (data.length > 0) {
+            const firstDate = data[data.length - 1].jsDate;
+            const diffTime = Math.abs(now - firstDate);
+            daysInPeriod = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+        }
     }
 
-    // 2. MACRO CALCULATIONS
+    // CALCULATIONS
     let totalCals = 0;
     let totalProt = 0;
-    
-    // Count unique days in this filter (to calculate averages & weight correctly)
-    const uniqueDaysSet = new Set(filtered.map(i => i.jsDate.toDateString()));
-    const uniqueDaysCount = uniqueDaysSet.size || 1; 
+    const uniqueDaysLogged = new Set(filtered.map(i => i.jsDate.toDateString())).size || 1; 
 
     filtered.forEach(item => {
         totalCals += item.cals;
         totalProt += item.protein;
     });
 
-    // 3. UPDATE STAT CARDS
     document.getElementById('statTitle').innerText = isDayView ? "Selected Day Cals" : title;
     document.getElementById('displayCals').innerText = totalCals.toLocaleString();
     document.getElementById('displayProt').innerText = totalProt.toLocaleString();
-    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / uniqueDaysCount);
+    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / (uniqueDaysLogged || 1));
 
-    // 4. WEIGHT ESTIMATION LOGIC (UPDATED)
+    // WEIGHT LOGIC
     const weightEl = document.getElementById('displayWeightChange');
-    
-    // Calculate Maintenance Cals for the days tracked (TDEE * Days Logged)
-    const maintenanceCals = TDEE * uniqueDaysCount;
-    
-    // The Deficit = Maintenance - What you actually ate
-    const deficit = maintenanceCals - totalCals;
-    
-    // Convert deficit to lbs (1 lb = 3500 kcal)
-    // We multiply by -1 because positive weight change means GAIN (bad deficit)
+    const totalMaintenanceNeeded = TDEE * daysInPeriod;
+    const deficit = totalMaintenanceNeeded - totalCals;
     const lbsChange = -(deficit / 3500); 
 
-    if (filtered.length > 0) {
-        const sign = lbsChange > 0 ? "+" : "";
-        weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
-        weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669"; // Red=Gain, Green=Loss
-    } else {
-        weightEl.innerText = "--";
-        weightEl.style.color = "#999";
-    }
-
-    // 5. RENDER FEED
+    const sign = lbsChange > 0 ? "+" : "";
+    weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
+    weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669"; 
+    
+    // Only filter the feed if we are NOT in 'all' or 'month' view (optional preference, usually nicer to see feed match stats)
     renderFeed(filtered);
 }
 
@@ -192,11 +186,9 @@ function renderCalendar(data) {
     const monthLabel = document.getElementById('calMonthName');
     grid.innerHTML = '';
 
-    // 1. Update Header Month Name
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     monthLabel.innerText = `${monthNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
 
-    // 2. Day Headers
     ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(d => {
         const header = document.createElement('div');
         header.style.textAlign = 'center';
@@ -205,13 +197,11 @@ function renderCalendar(data) {
         grid.appendChild(header);
     });
 
-    // 3. Grid Logic
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
     const firstDayIndex = new Date(year, month, 1).getDay(); 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // 4. Totals Map
     const dailyTotals = {};
     data.forEach(item => {
         const dateKey = item.jsDate.toDateString();
@@ -220,12 +210,10 @@ function renderCalendar(data) {
         dailyTotals[dateKey].prot += item.protein;
     });
 
-    // 5. Placeholders
     for (let i = 0; i < firstDayIndex; i++) {
         grid.appendChild(document.createElement('div'));
     }
 
-    // 6. Render Days
     for (let i = 1; i <= daysInMonth; i++) {
         const thisDate = new Date(year, month, i);
         const dateKey = thisDate.toDateString();
@@ -234,7 +222,6 @@ function renderCalendar(data) {
         const cell = document.createElement('div');
         cell.className = dayData.cals > 0 ? 'cal-day has-data' : 'cal-day';
         
-        // Add "Selected" styling if this is the active day
         if (currentView === 'day' && isSameDay(thisDate, selectedFilterDate)) {
             cell.classList.add('selected-day');
         }
@@ -247,17 +234,13 @@ function renderCalendar(data) {
             ` : ''}
         `;
         
-        // CLICK EVENT: Filter to this day
         cell.addEventListener('click', () => {
             selectedFilterDate = thisDate;
             currentView = 'day';
-            
-            // Update buttons UI
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('dayFilterBtn').classList.add('active');
-
             calculateStats(allLogs);
-            renderCalendar(allLogs); // Re-render to show selection border
+            renderCalendar(allLogs); 
         });
 
         grid.appendChild(cell);
@@ -281,14 +264,19 @@ function renderFeed(data) {
                 <div style="font-size: 0.7em; color: #999; margin-top:5px;">
                     ${item.jsDate.toLocaleDateString()} ${item.jsDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                 </div>
-                <button class="edit-btn" onclick="triggerEdit('${item.id}')">Edit</button>
+                
+                <div class="action-row">
+                    <button class="edit-btn" onclick="triggerEdit('${item.id}')">Edit</button>
+                    <button class="relog-btn" onclick="triggerQuickAdd('${item.id}')">Add Again</button>
+                </div>
             </div>
         `;
         feed.appendChild(card);
     });
 }
 
-// Stats & Edit Helpers (Unchanged Logic, just ensuring global scope)
+// --- GLOBAL HELPERS (Edit, Quick Add, Reset) ---
+
 window.triggerEdit = (id) => {
     const item = allLogs.find(log => log.id === id);
     if (!item) return;
@@ -309,6 +297,42 @@ window.triggerEdit = (id) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
+window.triggerQuickAdd = (id) => {
+    // 1. Find log
+    const item = allLogs.find(log => log.id === id);
+    if (!item) return;
+
+    // 2. Pre-fill form
+    document.getElementById('foodName').value = item.name;
+    document.getElementById('cals').value = item.cals;
+    document.getElementById('prot').value = item.protein;
+    document.getElementById('carb').value = item.carbs;
+    document.getElementById('fat').value = item.fat;
+    document.getElementById('imgUrl').value = item.img;
+    
+    // 3. Set Date to NOW
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('logDate').value = now.toISOString().slice(0, 16);
+
+    // 4. Clear ID to ensure NEW entry
+    document.getElementById('editId').value = ""; 
+
+    // 5. Update UI
+    document.getElementById('formTitle').innerText = `Add Again: ${item.name}`;
+    document.getElementById('saveBtn').innerText = "Save New Entry";
+    
+    // 6. Show Form
+    formBox.classList.remove('hidden');
+    toggleBtn.textContent = 'Close';
+    
+    // Switch to main dashboard if on stats page
+    statsDash.classList.add('hidden');
+    mainDash.classList.remove('hidden');
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 function resetForm() {
     form.reset();
     document.getElementById('editId').value = "";
@@ -326,7 +350,7 @@ function isSameDay(d1, d2) {
            d1.getFullYear() === d2.getFullYear();
 }
 
-// Cool Stats Page Logic (Kept mostly same, added null checks)
+// --- STATS PAGE LOGIC ---
 const mainDash = document.getElementById('mainDashboard');
 const statsDash = document.getElementById('statsDashboard');
 const showStatsBtn = document.getElementById('showStatsBtn');
@@ -348,12 +372,15 @@ function calculateCoolStats(data) {
     let totalCals = 0, totalProt = 0;
     const foodCounts = {};
     const dailySums = {};
+    const foodReference = {}; 
 
     data.forEach(item => {
         totalCals += item.cals;
         totalProt += item.protein;
         const name = item.name.trim().toLowerCase();
         foodCounts[name] = (foodCounts[name] || 0) + 1;
+        foodReference[name] = item.id; 
+
         const dateKey = item.jsDate.toDateString();
         if (!dailySums[dateKey]) dailySums[dateKey] = { cals: 0, prot: 0, date: dateKey };
         dailySums[dateKey].cals += item.cals;
@@ -373,20 +400,23 @@ function calculateCoolStats(data) {
     days.sort((a, b) => b.prot - a.prot);
     if (days.length > 0) document.getElementById('statMaxProt').innerText = days[0].prot;
 
+    // TOP FOODS (Clickable)
     const sortedFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const list = document.getElementById('topFoodsList');
     list.innerHTML = '';
     sortedFoods.forEach(([name, count]) => {
+        const refId = foodReference[name]; 
         const li = document.createElement('li');
-        li.style.padding = "8px 0";
+        li.className = 'crave-item'; 
         li.style.borderBottom = "1px solid #eee";
         li.style.display = "flex";
         li.style.justifyContent = "space-between";
         const displayName = name.charAt(0).toUpperCase() + name.slice(1);
-        li.innerHTML = `<span>${displayName}</span> <span style="font-weight:bold; color:var(--accent);">${count}x</span>`;
+        
+        li.onclick = () => triggerQuickAdd(refId);
+        li.title = "Click to add again";
+
+        li.innerHTML = `<span>${displayName}</span> <span style="font-weight:bold; color:var(--accent);">${count}x +</span>`;
         list.appendChild(li);
     });
 }
-
-
-
