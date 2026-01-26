@@ -232,3 +232,22 @@ input {
     .bento-grid { grid-template-columns: 1fr; }
     .wide { grid-column: span 1; }
 }
+
+/* --- READ ONLY MODE (Visitors) --- */
+body.read-only #toggleFormBtn,    /* Hide Log Food button */
+body.read-only .action-row,       /* Hide Edit/Add Again buttons */
+body.read-only .edit-btn,
+body.read-only .relog-btn {
+    display: none !important;
+}
+
+/* Disable clicking on Cravings in read-only mode */
+body.read-only .crave-item {
+    pointer-events: none;
+    cursor: default;
+}
+
+/* Fix grid layout when buttons are gone */
+body.read-only .food-info {
+    padding-bottom: 15px;
+}
