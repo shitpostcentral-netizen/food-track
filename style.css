@@ -2,8 +2,8 @@
     --bg: #f0f2f5;
     --card-bg: #ffffff;
     --text: #1a1a1a;
-    --accent: #4f46e5; /* Indigo */
-    --accent-light: #e0e7ff;
+    --accent: #4f46e5;
+    --success: #059669;
     --radius: 20px;
 }
 
@@ -15,47 +15,50 @@ body {
     padding: 20px;
 }
 
-.container {
-    max-width: 900px;
-    margin: 0 auto;
-}
+.container { max-width: 900px; margin: 0 auto; }
 
-/* Bento Utilities */
+/* Bento Box & Grid */
 .bento-box {
     background: var(--card-bg);
     border-radius: var(--radius);
     padding: 20px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
-
 .bento-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 15px;
     margin-bottom: 30px;
 }
-
 .wide { grid-column: span 2; }
 
-/* Header */
+/* Header & Buttons */
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
 }
+.header-actions { display: flex; gap: 8px; }
 
 button {
-    background: var(--accent);
-    color: white;
     border: none;
     padding: 10px 20px;
     border-radius: 12px;
     cursor: pointer;
     font-weight: bold;
+    transition: opacity 0.2s;
 }
+button:hover { opacity: 0.9; }
 
-/* Form */
+.primary-btn { background: var(--accent); color: white; }
+.secondary-btn { background: white; color: #333; border: 1px solid #ddd; }
+.metric-btn { background: var(--success); color: white; }
+.cancel-btn { background: #9ca3af; color: white; }
+
+/* Forms */
 .hidden { display: none; }
 .form-box { margin-bottom: 20px; }
 input {
@@ -67,187 +70,84 @@ input {
     box-sizing: border-box;
 }
 .input-row { display: flex; gap: 10px; }
+.input-row > div { flex: 1; }
 .form-actions { display: flex; gap: 10px; }
 
-/* Stats */
+/* Stats & Typography */
 .stat-card { text-align: center; }
 .big-number {
     display: block;
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     font-weight: 800;
     color: var(--accent);
 }
 .stat-card small { display: block; margin-top: 5px; color: #666; }
 
 /* Controls */
-.stats-controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-.filter-btn {
-    background: white;
-    color: #555;
-    flex: 1;
-    border: 1px solid #ddd;
-}
-.filter-btn.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-}
+.stats-controls { display: flex; gap: 10px; margin-bottom: 20px; }
+.filter-btn { background: white; color: #555; flex: 1; border: 1px solid #ddd; }
+.filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
 /* Calendar */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 8px;
+    gap: 6px;
     margin-top: 15px;
 }
 .cal-day {
     background: #f8f9fa;
     border-radius: 8px;
-    padding: 8px;
-    min-height: 60px;
+    padding: 6px;
+    min-height: 70px; /* Taller for steps */
     font-size: 0.8rem;
     position: relative;
     border: 1px solid #eee;
     cursor: pointer;
     transition: transform 0.1s;
-}
-.cal-day:hover {
-    transform: scale(1.05);
-    background: #f0fdf4;
-}
-.cal-day.selected-day {
-    border: 2px solid var(--accent) !important;
-    background: #eef2ff !important;
-}
-.cal-day.has-data {
-    background: #e0e7ff; 
-    border-color: #c7d2fe;
-}
-.cal-date {
-    font-weight: bold;
-    display: block;
-    margin-bottom: 5px;
-}
-.cal-total {
-    color: var(--accent);
-    font-weight: 800;
-    font-size: 0.9rem;
-}
-.cal-sub {
-    font-size: 0.7rem;
-    color: #666;
-    margin-top: 2px;
-}
-.cal-header {
     display: flex;
+    flex-direction: column;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
 }
-.cal-nav {
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    cursor: pointer;
-    font-weight: bold;
-    color: #333;
-    padding: 0;
-}
-.cal-nav:hover { background: #f0f0f0; }
+.cal-day:hover { transform: scale(1.05); background: #f0fdf4; }
+.cal-day.selected-day { border: 2px solid var(--accent) !important; background: #eef2ff !important; }
+.cal-day.has-data { background: #e0e7ff; border-color: #c7d2fe; }
 
-/* Feed & Buttons */
-.feed-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
-}
-.food-card {
-    background: white;
-    border-radius: 15px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-.food-img {
-    width: 100%;
-    height: 150px;
-    object-fit: cover;
-    background: #eee;
-}
+.cal-date { font-weight: bold; font-size: 0.75rem; color: #888; margin-bottom: 2px; }
+.cal-total { color: var(--accent); font-weight: 800; font-size: 0.85rem; }
+.cal-sub { font-size: 0.65rem; color: #666; }
+.cal-steps { font-size: 0.65rem; color: #059669; font-weight: 600; margin-top: 2px; }
+
+.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+.cal-nav { background: white; border: 1px solid #ddd; border-radius: 50%; width: 30px; height: 30px; padding: 0; color: #333; }
+
+/* Feed */
+.feed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+.food-card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.metric-card { border: 1px solid #059669; } /* Special border for metric logs */
+
+.food-img { width: 100%; height: 150px; object-fit: cover; background: #eee; }
 .food-info { padding: 15px; }
-.macros {
-    font-size: 0.8rem;
-    color: #666;
-    display: flex;
-    justify-content: space-between;
-    margin-top: 5px;
-}
+.macros { font-size: 0.8rem; color: #666; display: flex; justify-content: space-between; margin-top: 5px; }
 
-/* Action Row (Edit/Relog) */
-.action-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-}
-.edit-btn, .relog-btn {
-    flex: 1;
-    padding: 6px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-.edit-btn {
-    background: #f3f4f6;
-    color: #4b5563;
-}
-.edit-btn:hover { background: #e5e7eb; }
-.relog-btn {
-    background: #e0e7ff; 
-    color: #4f46e5;
-}
-.relog-btn:hover { background: #c7d2fe; }
+/* Actions */
+.action-row { display: flex; gap: 8px; margin-top: 10px; }
+.edit-btn, .relog-btn { flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.8rem; }
+.edit-btn { background: #f3f4f6; color: #4b5563; }
+.relog-btn { background: #e0e7ff; color: #4f46e5; }
+.crave-item { cursor: pointer; padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+.crave-item:hover { background: #f9fafb; }
 
-/* Clickable Stats */
-.crave-item {
-    cursor: pointer;
-    transition: background 0.1s;
-    border-radius: 6px;
-    padding: 8px !important; 
-}
-.crave-item:hover {
-    background: #f9fafb;
-}
-
-/* Mobile */
-@media (max-width: 600px) {
-    .bento-grid { grid-template-columns: 1fr; }
-    .wide { grid-column: span 1; }
-}
-
-/* --- READ ONLY MODE (Visitors) --- */
-body.read-only #toggleFormBtn,    /* Hide Log Food button */
-body.read-only .action-row,       /* Hide Edit/Add Again buttons */
+/* Read Only Mode */
+body.read-only button:not(#showStatsBtn):not(#backBtn):not(.cal-nav):not(.filter-btn),
+body.read-only .action-row,
 body.read-only .edit-btn,
 body.read-only .relog-btn {
     display: none !important;
 }
+body.read-only .crave-item, body.read-only .cal-day { pointer-events: none; }
 
-/* Disable clicking on Cravings in read-only mode */
-body.read-only .crave-item {
-    pointer-events: none;
-    cursor: default;
-}
-
-/* Fix grid layout when buttons are gone */
-body.read-only .food-info {
-    padding-bottom: 15px;
+@media (max-width: 600px) {
+    .bento-grid { grid-template-columns: 1fr; }
+    .wide { grid-column: span 1; }
 }
