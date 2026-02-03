@@ -158,6 +158,7 @@ function calculateStats(data) {
     let isDayView = false;
     let daysSinceStart = 1;
 
+    // 1. DETERMINE TRACKING DURATION
     if (data.length > 0) {
         const firstDate = data[data.length - 1].jsDate;
         const diff = Math.abs(now - firstDate);
@@ -166,6 +167,7 @@ function calculateStats(data) {
 
     let daysInPeriod = 1;
 
+    // 2. FILTERING LOGIC
     if (currentView === 'day') {
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
@@ -190,49 +192,90 @@ function calculateStats(data) {
         daysInPeriod = daysSinceStart;
     }
 
-    // SEPARATE LOGS
+    // 3. SEPARATE LOGS
     const foodLogs = filtered.filter(l => l.type === 'food');
     const metricLogs = filtered.filter(l => l.type === 'metric');
 
-    // 1. CALCULATE FOOD TOTALS
+    // 4. CALCULATE FOOD TOTALS
     let totalCals = 0, totalProt = 0;
     foodLogs.forEach(f => { totalCals += f.cals; totalProt += f.protein; });
     
     const uniqueDays = new Set(foodLogs.map(i => i.jsDate.toDateString())).size || 1;
 
-    // 2. CALCULATE METRICS
-    let totalSteps = 0;
+    // 5. CALCULATE METRICS (Weight & Steps)
+    let totalStepsForDisplay = 0;
     let latestWeight = null;
+    let daysWithStepsCount = 0;
+    let totalBurnFromSteps = 0;
+    
+    // We use a Set to ensure we don't double-count the same day if you edited it
+    const daysWithStepLogs = new Set();
 
     metricLogs.forEach(m => {
-        totalSteps += m.steps || 0;
+        // Handle Weight
         if (m.weight > 0 && !latestWeight) latestWeight = m.weight; 
+        
+        // Handle Steps
+        const dateKey = m.jsDate.toDateString();
+        if (m.steps > 0) {
+            totalStepsForDisplay += m.steps;
+            
+            // If this is the first time seeing this day in this loop, calculate its burn
+            if (!daysWithStepLogs.has(dateKey)) {
+                daysWithStepLogs.add(dateKey);
+                // Specific Burn for this day: 1950 + (Steps * 0.04)
+                totalBurnFromSteps += (BASE_BMR + (m.steps * KCAL_PER_STEP));
+            }
+        }
     });
 
-    const avgSteps = Math.round(totalSteps / (daysInPeriod || 1));
-    const currentWeightDisplay = latestWeight ? latestWeight : "--";
+    daysWithStepsCount = daysWithStepLogs.size;
 
-    // 3. TDEE & WEIGHT CHANGE
-    const dynamicTDEE = BASE_BMR + (avgSteps * KCAL_PER_STEP);
-    const totalMaintenance = dynamicTDEE * daysInPeriod;
+    // 6. HYBRID MAINTENANCE CALCULATION (The Fix)
+    // Days WITH steps use the specific calculated burn.
+    // Days WITHOUT steps use the default 2460.
+    const defaultDaysCount = Math.max(0, daysInPeriod - daysWithStepsCount);
+    
+    // Total Maintenance = (Burn from Step Days) + (Default 2460 * Empty Days)
+    const totalMaintenance = totalBurnFromSteps + (defaultDaysCount * 2460);
+    
+    // Calculate Deficit
     const deficit = totalMaintenance - totalCals;
     const lbsChange = -(deficit / 3500);
 
-    // 4. UPDATE UI
+    // 7. DISPLAY CALCULATIONS
+    // Calculate "Effective Average TDEE" just for the label
+    const effectiveAvgTDEE = totalMaintenance / (daysInPeriod || 1);
+    
+    const currentWeightDisplay = latestWeight ? latestWeight : "--";
+    const avgSteps = Math.round(totalStepsForDisplay / (daysInPeriod || 1));
+
+    // 8. UPDATE UI
     document.getElementById('statTitle').innerText = isDayView ? "Selected Day Cals" : title;
-    document.getElementById('calGoalDisplay').innerText = `Est. Burn: ${Math.round(dynamicTDEE)}`;
+    
+    // Show Daily Goal: If day view has steps, show exact burn. If not, show 2460.
+    if (isDayView && daysWithStepsCount > 0) {
+        document.getElementById('calGoalDisplay').innerText = `Est. Burn: ${Math.round(totalMaintenance)}`;
+    } else if (isDayView) {
+        document.getElementById('calGoalDisplay').innerText = `Goal: 2460`;
+    } else {
+        document.getElementById('calGoalDisplay').innerText = `Avg Burn: ${Math.round(effectiveAvgTDEE)}`;
+    }
+
     document.getElementById('displayCals').innerText = totalCals.toLocaleString();
     document.getElementById('displayProt').innerText = totalProt.toLocaleString();
     document.getElementById('displayAvgProt').innerText = Math.round(totalProt / (uniqueDays || 1));
     
-    document.getElementById('displaySteps').innerText = isDayView ? totalSteps.toLocaleString() : avgSteps.toLocaleString();
+    document.getElementById('displaySteps').innerText = isDayView ? totalStepsForDisplay.toLocaleString() : avgSteps.toLocaleString();
     document.getElementById('displayWeight').innerText = currentWeightDisplay;
 
     const weightEl = document.getElementById('displayWeightChange');
     const sign = lbsChange > 0 ? "+" : "";
     weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
     weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669";
-    document.getElementById('tdeeDisplay').innerText = `based on ~${Math.round(dynamicTDEE)} TDEE`;
+    
+    // Update the small text below weight change
+    document.getElementById('tdeeDisplay').innerText = `based on ~${Math.round(effectiveAvgTDEE)} TDEE`;
 
     renderFeed(filtered);
 }
@@ -472,3 +515,4 @@ function updateCharts(data) {
     document.getElementById('statTotalSteps').innerText = totalSteps.toLocaleString();
     document.getElementById('statMinWeight').innerText = minWeight === 1000 ? '--' : minWeight;
 }
+
