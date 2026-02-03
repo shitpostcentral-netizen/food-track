@@ -11,17 +11,19 @@
 
     <div class="container">
         <header class="bento-box header">
-            <h1>🍱 Food Diary</h1>
-            <div style="display:flex; gap:10px;">
-                <button id="showStatsBtn" style="background:#fff; color:#333; border:1px solid #ddd;">Stats</button>
-                <button id="toggleFormBtn">+ Log Food</button>
+            <h1>🍱 Food & Body</h1>
+            <div class="header-actions">
+                <button id="showStatsBtn" class="secondary-btn">Stats</button>
+                <button id="toggleMetricBtn" class="metric-btn">⚖️ Log Body</button>
+                <button id="toggleFormBtn" class="primary-btn">+ Log Food</button>
             </div>
         </header>
 
         <div id="logForm" class="bento-box form-box hidden">
-            <h2 id="formTitle">Add Entry</h2>
+            <h2 id="formTitle">Add Food Entry</h2>
             <form id="foodForm">
-                <input type="hidden" id="editId"> <label>When?</label>
+                <input type="hidden" id="editId">
+                <label>When?</label>
                 <input type="datetime-local" id="logDate" required>
 
                 <input type="text" id="foodName" placeholder="What did you eat?" required>
@@ -36,8 +38,33 @@
                 <input type="url" id="imgUrl" placeholder="Image URL (Imgur link)">
                 
                 <div class="form-actions">
-                    <button type="submit" id="saveBtn">Save Entry</button>
-                    <button type="button" id="cancelEditBtn" class="hidden" style="background:#888;">Cancel</button>
+                    <button type="submit" id="saveBtn">Save Food</button>
+                    <button type="button" id="cancelEditBtn" class="cancel-btn hidden">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="metricForm" class="bento-box form-box hidden" style="border-left: 5px solid #059669;">
+            <h2>⚖️ Daily Metrics</h2>
+            <form id="bodyForm">
+                <input type="hidden" id="metricEditId">
+                <label>For which day?</label>
+                <input type="date" id="metricDate" required>
+                
+                <div class="input-row">
+                    <div>
+                        <label>Body Weight (lbs)</label>
+                        <input type="number" step="0.1" id="bodyWeight" placeholder="e.g. 195.5">
+                    </div>
+                    <div>
+                        <label>Steps Taken</label>
+                        <input type="number" id="dailySteps" placeholder="e.g. 6000">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" style="background:#059669;">Save Metrics</button>
+                    <button type="button" id="cancelMetricBtn" class="cancel-btn">Cancel</button>
                 </div>
             </form>
         </div>
@@ -55,23 +82,37 @@
                 <div class="bento-box stat-card highlight">
                     <h3 id="statTitle">Today's Calories</h3>
                     <span id="displayCals" class="big-number">0</span>
+                    <small id="calGoalDisplay">Goal: 2460</small>
                 </div>
                 
                 <div class="bento-box stat-card" style="background: #ecfdf5; border: 1px solid #a7f3d0;">
                     <h3>Est. Weight Change</h3>
                     <span id="displayWeightChange" class="big-number" style="color: #059669;">--</span>
-                    <small>based on 2460 TDEE</small>
+                    <small id="tdeeDisplay">based on activity</small>
                 </div>
 
                 <div class="bento-box stat-card">
-                    <h3>Total Protein</h3>
+                    <h3>Protein</h3>
                     <span id="displayProt" class="big-number">0</span>
                     <small>grams</small>
                 </div>
-                 <div class="bento-box stat-card">
-                    <h3>Avg Protein/Day</h3>
+
+                <div class="bento-box stat-card" style="background: #f0f9ff; border: 1px solid #bae6fd;">
+                    <h3>Steps & Activity</h3>
+                    <span id="displaySteps" class="big-number" style="color:#0284c7;">0</span>
+                    <small>steps</small>
+                </div>
+
+                <div class="bento-box stat-card">
+                    <h3>Weigh-In</h3>
+                    <span id="displayWeight" class="big-number">--</span>
+                    <small>lbs</small>
+                </div>
+
+                <div class="bento-box stat-card">
+                    <h3>Avg Protein</h3>
                     <span id="displayAvgProt" class="big-number">0</span>
-                    <small>grams</small>
+                    <small>grams/day</small>
                 </div>
 
                 <div class="bento-box wide calendar-container">
@@ -80,8 +121,7 @@
                         <h3 id="calMonthName" style="margin:0;">Month Year</h3>
                         <button id="nextMonth" class="cal-nav">&gt;</button>
                     </div>
-                    <div id="calendarGrid" class="calendar-grid">
-                        </div>
+                    <div id="calendarGrid" class="calendar-grid"></div>
                 </div>
             </div>
 
@@ -90,41 +130,37 @@
         </div>
 
         <div id="statsDashboard" class="hidden">
-            <button id="backBtn" style="margin-bottom:20px; padding: 10px 15px; background: #ddd; border:none; border-radius:8px; cursor:pointer;">← Back to Diary</button>
+            <button id="backBtn" class="secondary-btn" style="margin-bottom:20px;">← Back to Diary</button>
             
             <div class="bento-grid">
+                <div class="bento-box wide" style="height:300px;">
+                    <h3>Weight Trend</h3>
+                    <canvas id="weightChart"></canvas>
+                </div>
+
                 <div class="bento-box stat-card">
-                    <h3>Biggest Eater Day</h3>
-                    <span id="statMaxCals" class="big-number">0</span>
-                    <small id="statMaxCalsDate">No data</small>
+                    <h3>Lowest Weight</h3>
+                    <span id="statMinWeight" class="big-number">--</span>
+                    <small>lbs</small>
                 </div>
                 
                 <div class="bento-box stat-card">
-                    <h3>Protein Record</h3>
-                    <span id="statMaxProt" class="big-number">0</span>
-                    <small>grams in one day</small>
+                    <h3>Total Steps</h3>
+                    <span id="statTotalSteps" class="big-number">0</span>
+                    <small>Lifetime</small>
                 </div>
 
                 <div class="bento-box wide">
                     <h3>Top Cravings (Click to Add)</h3>
                     <ul id="topFoodsList" style="list-style:none; padding:0; margin-top:10px;"></ul>
                 </div>
-
+                
                 <div class="bento-box wide">
                     <h3>Lifetime Totals</h3>
                     <div style="display:flex; justify-content:space-around; text-align:center; margin-top:10px;">
-                        <div>
-                            <span id="lifeCals" style="font-size:1.5rem; font-weight:bold; color:var(--accent);">0</span>
-                            <br><small>Calories</small>
-                        </div>
-                        <div>
-                            <span id="lifeProt" style="font-size:1.5rem; font-weight:bold; color:var(--accent);">0</span>
-                            <br><small>Protein</small>
-                        </div>
-                        <div>
-                            <span id="lifeLogs" style="font-size:1.5rem; font-weight:bold; color:var(--accent);">0</span>
-                            <br><small>Entries</small>
-                        </div>
+                        <div><span id="lifeCals" class="big-number">0</span><br><small>Calories</small></div>
+                        <div><span id="lifeProt" class="big-number">0</span><br><small>Protein</small></div>
+                        <div><span id="lifeLogs" class="big-number">0</span><br><small>Entries</small></div>
                     </div>
                 </div>
             </div>
