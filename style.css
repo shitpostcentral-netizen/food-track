@@ -138,16 +138,25 @@ input {
 .crave-item { cursor: pointer; padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
 .crave-item:hover { background: #f9fafb; }
 
-/* Read Only Mode */
-body.read-only button:not(#showStatsBtn):not(#backBtn):not(.cal-nav):not(.filter-btn),
-body.read-only .action-row,
+/* --- READ ONLY MODE (Visitors) --- */
+
+/* 1. Hide the specific buttons */
+body.read-only #toggleFormBtn,    /* Hide Log Food */
+body.read-only #toggleMetricBtn,  /* Hide Log Body (NEW) */
+body.read-only .action-row,       /* Hide Edit/Add Again buttons */
 body.read-only .edit-btn,
 body.read-only .relog-btn {
     display: none !important;
 }
-body.read-only .crave-item, body.read-only .cal-day { pointer-events: none; }
 
-@media (max-width: 600px) {
-    .bento-grid { grid-template-columns: 1fr; }
-    .wide { grid-column: span 1; }
+/* 2. Disable clicking on interactive elements */
+body.read-only .crave-item,
+body.read-only .cal-day {
+    pointer-events: none;
+    cursor: default;
+}
+
+/* 3. Layout Fixes */
+body.read-only .food-info {
+    padding-bottom: 15px;
 }
