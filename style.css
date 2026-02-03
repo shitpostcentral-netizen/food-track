@@ -140,18 +140,17 @@ input {
 
 /* --- READ ONLY MODE (Visitors) --- */
 
-/* 1. Hide the specific buttons */
+/* 1. Hide the "Action" buttons (Editing/Adding) */
 body.read-only #toggleFormBtn,    /* Hide Log Food */
-body.read-only #toggleMetricBtn,  /* Hide Log Body (NEW) */
-body.read-only .action-row,       /* Hide Edit/Add Again buttons */
+body.read-only #toggleMetricBtn,  /* Hide Log Body */
+body.read-only .action-row,       /* Hide Edit/Add/Delete buttons on cards */
 body.read-only .edit-btn,
 body.read-only .relog-btn {
     display: none !important;
 }
 
-/* 2. Disable clicking on interactive elements */
-body.read-only .crave-item,
-body.read-only .cal-day {
+/* 2. Disable clicking on "Top Cravings" (since that adds food) */
+body.read-only .crave-item {
     pointer-events: none;
     cursor: default;
 }
@@ -160,3 +159,6 @@ body.read-only .cal-day {
 body.read-only .food-info {
     padding-bottom: 15px;
 }
+
+/* Note: We REMOVED the rule disabling .cal-day so you can now click them! */
+
