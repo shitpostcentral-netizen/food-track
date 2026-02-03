@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, updateDoc, doc, query, orderBy, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// --- CLEAN CONFIG ---
+// --- PASTE YOUR API KEYS HERE ---
 const firebaseConfig = {
     apiKey: "AIzaSyDp4HDIZxNq9_mibAryJdF839LDofOZyzg",
     authDomain: "food-diary-7293d.firebaseapp.com",
@@ -16,111 +16,133 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- ADMIN CHECK (Read-Only Mode) ---
+// --- ADMIN CHECK ---
 const urlParams = new URLSearchParams(window.location.search);
 const isAdmin = urlParams.get('mode') === 'admin';
-
-if (!isAdmin) {
-    document.body.classList.add('read-only');
-    console.log("View-Only Mode Active");
-} else {
-    console.log("Admin Mode Active");
-}
+if (!isAdmin) document.body.classList.add('read-only');
 
 // --- STATE ---
 let allLogs = [];
-let currentView = 'day'; // 'day', 'week', 'month', 'all'
+let currentView = 'day'; 
+let viewDate = new Date();
+let selectedFilterDate = new Date();
+let weightChartInstance = null;
 
-// Calendar State
-let viewDate = new Date(); // The month currently visible on calendar
-let selectedFilterDate = new Date(); // The specific day selected for stats
-
-// YOUR STATS
-const TDEE = 2460; 
+// CONSTANTS (For math)
+// Base BMR for 5'10, 200lbs, 26M is roughly ~1950 Sedentary
+const BASE_BMR = 1950; 
+const KCAL_PER_STEP = 0.04; 
 
 // DOM ELEMENTS
-const form = document.getElementById('foodForm');
-const formBox = document.getElementById('logForm');
-const toggleBtn = document.getElementById('toggleFormBtn');
-const cancelEditBtn = document.getElementById('cancelEditBtn');
+const foodForm = document.getElementById('foodForm');
+const metricForm = document.getElementById('bodyForm');
+const foodBox = document.getElementById('logForm');
+const metricBox = document.getElementById('metricForm');
 
 // --- EVENT LISTENERS ---
 
-// 1. Calendar Navigation
-document.getElementById('prevMonth').addEventListener('click', () => changeMonth(-1));
-document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
+// 1. Navigation & Toggles
+document.getElementById('toggleFormBtn').addEventListener('click', () => {
+    resetForms();
+    foodBox.classList.toggle('hidden');
+    metricBox.classList.add('hidden');
+});
 
-function changeMonth(offset) {
-    viewDate.setMonth(viewDate.getMonth() + offset);
+document.getElementById('toggleMetricBtn').addEventListener('click', () => {
+    resetForms();
+    metricBox.classList.toggle('hidden');
+    foodBox.classList.add('hidden');
+    // Default metric date to today
+    document.getElementById('metricDate').valueAsDate = new Date();
+});
+
+document.querySelectorAll('.cancel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        foodBox.classList.add('hidden');
+        metricBox.classList.add('hidden');
+    });
+});
+
+// 2. Calendar Nav
+document.getElementById('prevMonth').addEventListener('click', () => {
+    viewDate.setMonth(viewDate.getMonth() - 1);
     renderCalendar(allLogs);
-}
+});
+document.getElementById('nextMonth').addEventListener('click', () => {
+    viewDate.setMonth(viewDate.getMonth() + 1);
+    renderCalendar(allLogs);
+});
 
-// 2. Filter Buttons
+// 3. Filter Buttons
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         currentView = e.target.dataset.view;
-        
         if (currentView === 'day') selectedFilterDate = new Date();
-        
         calculateStats(allLogs);
     });
 });
 
-// 3. Form Handling (Create/Update)
-toggleBtn.addEventListener('click', () => {
-    resetForm();
-    formBox.classList.toggle('hidden');
-    toggleBtn.textContent = formBox.classList.contains('hidden') ? '+ Log Food' : 'Close';
-});
-
-form.addEventListener('submit', async (e) => {
+// 4. SUBMIT FOOD
+foodForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const editId = document.getElementById('editId').value;
-    const dateVal = document.getElementById('logDate').value; 
-    
     const entry = {
+        type: 'food',
         name: document.getElementById('foodName').value,
         cals: Number(document.getElementById('cals').value),
         protein: Number(document.getElementById('prot').value),
         carbs: Number(document.getElementById('carb').value),
         fat: Number(document.getElementById('fat').value),
         img: document.getElementById('imgUrl').value || 'https://placehold.co/400x300?text=No+Image',
-        date: new Date(dateVal) 
+        date: new Date(document.getElementById('logDate').value)
     };
 
     try {
-        if (editId) {
-            await updateDoc(doc(db, "logs", editId), entry);
-        } else {
-            await addDoc(collection(db, "logs"), entry);
-        }
-        resetForm();
-        formBox.classList.add('hidden');
-        toggleBtn.textContent = '+ Log Food';
-    } catch (err) {
-        console.error("Error:", err);
-    }
+        if (editId) await updateDoc(doc(db, "logs", editId), entry);
+        else await addDoc(collection(db, "logs"), entry);
+        foodBox.classList.add('hidden');
+    } catch (err) { console.error(err); }
 });
 
-// 4. Cancel Edit
-cancelEditBtn.addEventListener('click', () => {
-    resetForm();
-    formBox.classList.add('hidden');
+// 5. SUBMIT METRICS (Steps/Weight)
+metricForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const editId = document.getElementById('metricEditId').value;
+    
+    // We create a date object from the date picker (YYYY-MM-DD)
+    // We set time to Noon to avoid timezone edge cases
+    const dateInput = document.getElementById('metricDate').value; // String YYYY-MM-DD
+    const dateObj = new Date(dateInput + 'T12:00:00');
+
+    const entry = {
+        type: 'metric',
+        weight: Number(document.getElementById('bodyWeight').value) || 0,
+        steps: Number(document.getElementById('dailySteps').value) || 0,
+        date: dateObj
+    };
+
+    try {
+        if (editId) await updateDoc(doc(db, "logs", editId), entry);
+        else await addDoc(collection(db, "logs"), entry);
+        metricBox.classList.add('hidden');
+    } catch (err) { console.error(err); }
 });
 
-// --- REAL-TIME DATA ---
+// --- DATA LISTENER ---
 const q = query(collection(db, "logs"), orderBy("date", "desc"));
-
 onSnapshot(q, (snapshot) => {
     allLogs = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data(),
-        jsDate: doc.data().date.toDate() 
+        id: doc.id, ...doc.data(), jsDate: doc.data().date.toDate() 
     }));
+    
+    // Handle legacy data (add type='food' if missing)
+    allLogs.forEach(log => {
+        if (!log.type) log.type = 'food';
+    });
 
-    renderFeed(allLogs); 
+    renderFeed(allLogs);
     renderCalendar(allLogs);
     calculateStats(allLogs);
 });
@@ -132,82 +154,91 @@ function calculateStats(data) {
     let filtered = [];
     let title = "";
     let isDayView = false;
-    
-    // 1. DETERMINE HOW LONG THE USER HAS BEEN TRACKING
-    // We need this to prevent the "Jan 1st" bug.
     let daysSinceStart = 1;
+
     if (data.length > 0) {
-        // data is sorted newest-first, so the LAST item is the OLDEST log
         const firstDate = data[data.length - 1].jsDate;
-        const diffTime = Math.abs(now - firstDate);
-        // Convert ms to days (ceil rounds up partial days)
-        daysSinceStart = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+        const diff = Math.abs(now - firstDate);
+        daysSinceStart = Math.ceil(diff / (1000 * 60 * 60 * 24)) || 1;
     }
 
-    // 2. FILTERING & TIME PERIOD LOGIC
     let daysInPeriod = 1;
 
     if (currentView === 'day') {
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
         isDayView = true;
-        daysInPeriod = 1;
     } else if (currentView === 'week') {
         title = "This Week";
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(now.getDate() - 7);
         filtered = data.filter(item => item.jsDate >= oneWeekAgo);
-        
-        // FIX: Use 7 days, OR fewer if you started tracking less than 7 days ago
-        daysInPeriod = Math.min(7, daysSinceStart); 
-        
+        daysInPeriod = Math.min(7, daysSinceStart);
     } else if (currentView === 'month') {
         title = "This Month";
         filtered = data.filter(item => 
             item.jsDate.getMonth() === now.getMonth() && 
             item.jsDate.getFullYear() === now.getFullYear()
         );
-        
-        // FIX: Use today's date (e.g., 26th), OR fewer if you started recently
         daysInPeriod = Math.min(now.getDate(), daysSinceStart);
-        
     } else if (currentView === 'all') {
         title = "All Time";
         filtered = data;
         daysInPeriod = daysSinceStart;
     }
 
-    // 3. CALCULATE TOTALS
-    let totalCals = 0;
-    let totalProt = 0;
-    
-    // Count days actually logged (for average calculation)
-    const uniqueDaysLogged = new Set(filtered.map(i => i.jsDate.toDateString())).size || 1; 
+    // SEPARATE LOGS
+    const foodLogs = filtered.filter(l => l.type === 'food');
+    const metricLogs = filtered.filter(l => l.type === 'metric');
 
-    filtered.forEach(item => {
-        totalCals += item.cals;
-        totalProt += item.protein;
+    // 1. CALCULATE FOOD TOTALS
+    let totalCals = 0, totalProt = 0;
+    foodLogs.forEach(f => { totalCals += f.cals; totalProt += f.protein; });
+    
+    const uniqueDays = new Set(foodLogs.map(i => i.jsDate.toDateString())).size || 1;
+
+    // 2. CALCULATE METRICS (Avg Steps, Current Weight)
+    let totalSteps = 0;
+    let weightSum = 0;
+    let weightCount = 0;
+    let latestWeight = null;
+
+    metricLogs.forEach(m => {
+        totalSteps += m.steps || 0;
+        if (m.weight > 0) {
+            weightSum += m.weight;
+            weightCount++;
+            // Since data is sorted desc, the first weight we find is the latest
+            if (!latestWeight) latestWeight = m.weight; 
+        }
     });
 
-    // 4. UPDATE STAT CARDS
+    const avgSteps = Math.round(totalSteps / (daysInPeriod || 1));
+    const currentWeightDisplay = latestWeight ? latestWeight : "--";
+
+    // 3. TDEE & WEIGHT CHANGE LOGIC
+    // Dynamic TDEE: Base + (AvgSteps * 0.04)
+    const dynamicTDEE = BASE_BMR + (avgSteps * KCAL_PER_STEP);
+    const totalMaintenance = dynamicTDEE * daysInPeriod;
+    const deficit = totalMaintenance - totalCals;
+    const lbsChange = -(deficit / 3500);
+
+    // 4. UPDATE UI
     document.getElementById('statTitle').innerText = isDayView ? "Selected Day Cals" : title;
+    document.getElementById('calGoalDisplay').innerText = `Est. Burn: ${Math.round(dynamicTDEE)}`;
     document.getElementById('displayCals').innerText = totalCals.toLocaleString();
     document.getElementById('displayProt').innerText = totalProt.toLocaleString();
-    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / (uniqueDaysLogged || 1));
-
-    // 5. WEIGHT ESTIMATION LOGIC
-    const weightEl = document.getElementById('displayWeightChange');
+    document.getElementById('displayAvgProt').innerText = Math.round(totalProt / (uniqueDays || 1));
     
-    // TDEE * Real Days Passed
-    const totalMaintenanceNeeded = TDEE * daysInPeriod;
-    const deficit = totalMaintenanceNeeded - totalCals;
-    const lbsChange = -(deficit / 3500); 
+    document.getElementById('displaySteps').innerText = isDayView ? totalSteps.toLocaleString() : avgSteps.toLocaleString();
+    document.getElementById('displayWeight').innerText = currentWeightDisplay;
 
+    const weightEl = document.getElementById('displayWeightChange');
     const sign = lbsChange > 0 ? "+" : "";
     weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
-    weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669"; 
-    
-    // Render the feed
+    weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669";
+    document.getElementById('tdeeDisplay').innerText = `based on ~${Math.round(dynamicTDEE)} TDEE`;
+
     renderFeed(filtered);
 }
 
@@ -220,11 +251,9 @@ function renderCalendar(data) {
     monthLabel.innerText = `${monthNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
 
     ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(d => {
-        const header = document.createElement('div');
-        header.style.textAlign = 'center';
-        header.style.color = '#888';
-        header.innerText = d;
-        grid.appendChild(header);
+        const h = document.createElement('div');
+        h.style.textAlign='center'; h.style.color='#888'; h.innerText=d;
+        grid.appendChild(h);
     });
 
     const year = viewDate.getFullYear();
@@ -232,47 +261,47 @@ function renderCalendar(data) {
     const firstDayIndex = new Date(year, month, 1).getDay(); 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const dailyTotals = {};
+    // Aggregate Data by Date
+    const dailyData = {};
     data.forEach(item => {
-        const dateKey = item.jsDate.toDateString();
-        if (!dailyTotals[dateKey]) dailyTotals[dateKey] = { cals: 0, prot: 0 };
-        dailyTotals[dateKey].cals += item.cals;
-        dailyTotals[dateKey].prot += item.protein;
+        const key = item.jsDate.toDateString();
+        if (!dailyData[key]) dailyData[key] = { cals:0, prot:0, steps:0, hasWeight:false };
+        
+        if (item.type === 'food') {
+            dailyData[key].cals += item.cals;
+            dailyData[key].prot += item.protein;
+        } else if (item.type === 'metric') {
+            dailyData[key].steps += (item.steps || 0);
+            if (item.weight > 0) dailyData[key].hasWeight = true;
+        }
     });
 
-    for (let i = 0; i < firstDayIndex; i++) {
-        grid.appendChild(document.createElement('div'));
-    }
+    for (let i=0; i<firstDayIndex; i++) grid.appendChild(document.createElement('div'));
 
-    for (let i = 1; i <= daysInMonth; i++) {
+    for (let i=1; i<=daysInMonth; i++) {
         const thisDate = new Date(year, month, i);
-        const dateKey = thisDate.toDateString();
-        const dayData = dailyTotals[dateKey] || { cals: 0, prot: 0 };
+        const key = thisDate.toDateString();
+        const d = dailyData[key] || { cals:0, prot:0, steps:0 };
         
         const cell = document.createElement('div');
-        cell.className = dayData.cals > 0 ? 'cal-day has-data' : 'cal-day';
-        
-        if (currentView === 'day' && isSameDay(thisDate, selectedFilterDate)) {
-            cell.classList.add('selected-day');
-        }
+        cell.className = (d.cals > 0 || d.steps > 0) ? 'cal-day has-data' : 'cal-day';
+        if (currentView === 'day' && isSameDay(thisDate, selectedFilterDate)) cell.classList.add('selected-day');
 
-        cell.innerHTML = `
-            <span class="cal-date">${i}</span>
-            ${dayData.cals > 0 ? `
-                <div class="cal-total">${dayData.cals}</div>
-                <div class="cal-sub">P: ${dayData.prot}g</div>
-            ` : ''}
-        `;
+        // Content
+        let html = `<span class="cal-date">${i}</span>`;
+        if (d.cals > 0) html += `<div class="cal-total">${d.cals}</div><div class="cal-sub">P:${d.prot}g</div>`;
+        if (d.steps > 0) html += `<div class="cal-steps">👟${(d.steps/1000).toFixed(1)}k</div>`;
+        else if (d.hasWeight) html += `<div class="cal-steps">⚖️ Logged</div>`;
         
+        cell.innerHTML = html;
         cell.addEventListener('click', () => {
             selectedFilterDate = thisDate;
             currentView = 'day';
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('dayFilterBtn').classList.add('active');
             calculateStats(allLogs);
-            renderCalendar(allLogs); 
+            renderCalendar(allLogs);
         });
-
         grid.appendChild(cell);
     }
 }
@@ -280,59 +309,90 @@ function renderCalendar(data) {
 function renderFeed(data) {
     const feed = document.getElementById('feed');
     feed.innerHTML = '';
+    
     data.forEach(item => {
         const card = document.createElement('div');
-        card.className = 'food-card';
-        card.innerHTML = `
-            <img src="${item.img}" class="food-img" alt="food">
-            <div class="food-info">
-                <strong>${item.name}</strong>
-                <div class="macros">
-                    <span>${item.cals} kcal</span>
-                    <span>P: ${item.protein}g</span>
+        
+        if (item.type === 'food') {
+            card.className = 'food-card';
+            card.innerHTML = `
+                <img src="${item.img}" class="food-img" alt="food">
+                <div class="food-info">
+                    <strong>${item.name}</strong>
+                    <div class="macros">
+                        <span>${item.cals} kcal</span><span>P: ${item.protein}g</span>
+                    </div>
+                    <div style="font-size:0.7em; color:#999; margin-top:5px;">
+                        ${item.jsDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                    </div>
+                    <div class="action-row">
+                        <button class="edit-btn" onclick="triggerEdit('${item.id}')">Edit</button>
+                        <button class="relog-btn" onclick="triggerQuickAdd('${item.id}')">Add Again</button>
+                    </div>
                 </div>
-                <div style="font-size: 0.7em; color: #999; margin-top:5px;">
-                    ${item.jsDate.toLocaleDateString()} ${item.jsDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+            `;
+        } else {
+            // METRIC CARD
+            card.className = 'food-card metric-card';
+            card.innerHTML = `
+                <div style="padding:15px; background:#f0fdf4;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <strong>⚖️ Daily Metrics</strong>
+                        <small>${item.jsDate.toLocaleDateString()}</small>
+                    </div>
+                    <div style="margin-top:10px; display:flex; gap:15px;">
+                        <div>
+                            <span style="font-size:1.2rem; font-weight:bold; color:#059669;">${item.weight || '--'}</span> <small>lbs</small>
+                        </div>
+                        <div>
+                            <span style="font-size:1.2rem; font-weight:bold; color:#0284c7;">${item.steps || 0}</span> <small>steps</small>
+                        </div>
+                    </div>
+                    <div class="action-row">
+                        <button class="edit-btn" onclick="triggerMetricEdit('${item.id}')">Edit</button>
+                    </div>
                 </div>
-                
-                <div class="action-row">
-                    <button class="edit-btn" onclick="triggerEdit('${item.id}')">Edit</button>
-                    <button class="relog-btn" onclick="triggerQuickAdd('${item.id}')">Add Again</button>
-                </div>
-            </div>
-        `;
+            `;
+        }
         feed.appendChild(card);
     });
 }
 
-// --- GLOBAL HELPERS (Edit, Quick Add, Reset) ---
-
+// --- GLOBAL HELPERS ---
 window.triggerEdit = (id) => {
-    const item = allLogs.find(log => log.id === id);
+    const item = allLogs.find(l => l.id === id);
     if (!item) return;
-    document.getElementById('editId').value = item.id;
+    document.getElementById('editId').value = id;
     document.getElementById('foodName').value = item.name;
     document.getElementById('cals').value = item.cals;
     document.getElementById('prot').value = item.protein;
     document.getElementById('carb').value = item.carbs;
     document.getElementById('fat').value = item.fat;
     document.getElementById('imgUrl').value = item.img;
-    const date = item.jsDate;
-    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
-    document.getElementById('logDate').value = localDate.toISOString().slice(0, 16); 
-    document.getElementById('formTitle').innerText = "Edit Entry";
-    document.getElementById('saveBtn').innerText = "Update Entry";
-    document.getElementById('cancelEditBtn').classList.remove('hidden');
-    formBox.classList.remove('hidden');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const localDate = new Date(item.jsDate.getTime() - (item.jsDate.getTimezoneOffset() * 60000));
+    document.getElementById('logDate').value = localDate.toISOString().slice(0, 16);
+    
+    foodBox.classList.remove('hidden');
+    metricBox.classList.add('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+};
+
+window.triggerMetricEdit = (id) => {
+    const item = allLogs.find(l => l.id === id);
+    if (!item) return;
+    document.getElementById('metricEditId').value = id;
+    document.getElementById('metricDate').valueAsDate = item.jsDate;
+    document.getElementById('bodyWeight').value = item.weight || '';
+    document.getElementById('dailySteps').value = item.steps || '';
+    
+    metricBox.classList.remove('hidden');
+    foodBox.classList.add('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
 };
 
 window.triggerQuickAdd = (id) => {
-    // 1. Find log
-    const item = allLogs.find(log => log.id === id);
+    const item = allLogs.find(l => l.id === id);
     if (!item) return;
-
-    // 2. Pre-fill form
     document.getElementById('foodName').value = item.name;
     document.getElementById('cals').value = item.cals;
     document.getElementById('prot').value = item.protein;
@@ -340,38 +400,24 @@ window.triggerQuickAdd = (id) => {
     document.getElementById('fat').value = item.fat;
     document.getElementById('imgUrl').value = item.img;
     
-    // 3. Set Date to NOW
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('logDate').value = now.toISOString().slice(0, 16);
-
-    // 4. Clear ID to ensure NEW entry
     document.getElementById('editId').value = ""; 
-
-    // 5. Update UI
-    document.getElementById('formTitle').innerText = `Add Again: ${item.name}`;
-    document.getElementById('saveBtn').innerText = "Save New Entry";
     
-    // 6. Show Form
-    formBox.classList.remove('hidden');
-    toggleBtn.textContent = 'Close';
-    
-    // Switch to main dashboard if on stats page
-    statsDash.classList.add('hidden');
-    mainDash.classList.remove('hidden');
-    
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    foodBox.classList.remove('hidden');
+    metricBox.classList.add('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
 };
 
-function resetForm() {
-    form.reset();
+function resetForms() {
+    foodForm.reset();
+    metricForm.reset();
     document.getElementById('editId').value = "";
-    document.getElementById('formTitle').innerText = "Add Entry";
-    document.getElementById('saveBtn').innerText = "Save Entry";
-    document.getElementById('cancelEditBtn').classList.add('hidden');
+    document.getElementById('metricEditId').value = "";
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('logDate').value = now.toISOString().slice(0,16);
+    document.getElementById('logDate').value = now.toISOString().slice(0, 16);
 }
 
 function isSameDay(d1, d2) {
@@ -380,74 +426,60 @@ function isSameDay(d1, d2) {
            d1.getFullYear() === d2.getFullYear();
 }
 
-// --- STATS PAGE LOGIC ---
+// --- STATS PAGE & CHART ---
 const mainDash = document.getElementById('mainDashboard');
 const statsDash = document.getElementById('statsDashboard');
-const showStatsBtn = document.getElementById('showStatsBtn');
-const backBtn = document.getElementById('backBtn');
-
-showStatsBtn.addEventListener('click', () => {
+document.getElementById('showStatsBtn').addEventListener('click', () => {
     mainDash.classList.add('hidden');
     statsDash.classList.remove('hidden');
-    calculateCoolStats(allLogs);
+    updateCharts(allLogs);
 });
-
-backBtn.addEventListener('click', () => {
+document.getElementById('backBtn').addEventListener('click', () => {
     statsDash.classList.add('hidden');
     mainDash.classList.remove('hidden');
 });
 
-function calculateCoolStats(data) {
-    if (data.length === 0) return;
-    let totalCals = 0, totalProt = 0;
-    const foodCounts = {};
-    const dailySums = {};
-    const foodReference = {}; 
+function updateCharts(data) {
+    // 1. Prepare Data
+    const metrics = data.filter(i => i.type === 'metric' && i.weight > 0).reverse(); // Oldest first
+    const dates = metrics.map(m => m.jsDate.toLocaleDateString());
+    const weights = metrics.map(m => m.weight);
 
-    data.forEach(item => {
-        totalCals += item.cals;
-        totalProt += item.protein;
-        const name = item.name.trim().toLowerCase();
-        foodCounts[name] = (foodCounts[name] || 0) + 1;
-        foodReference[name] = item.id; 
+    // 2. Render Chart
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    if (weightChartInstance) weightChartInstance.destroy();
+    
+    weightChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Body Weight (lbs)',
+                data: weights,
+                borderColor: '#059669',
+                backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
 
-        const dateKey = item.jsDate.toDateString();
-        if (!dailySums[dateKey]) dailySums[dateKey] = { cals: 0, prot: 0, date: dateKey };
-        dailySums[dateKey].cals += item.cals;
-        dailySums[dateKey].prot += item.protein;
+    // 3. Populate other stat cards
+    const foodLogs = data.filter(i => i.type === 'food');
+    let totalCals = 0, totalProt = 0, totalSteps = 0;
+    let minWeight = 1000;
+    
+    data.forEach(i => {
+        if(i.cals) totalCals += i.cals;
+        if(i.protein) totalProt += i.protein;
+        if(i.steps) totalSteps += i.steps;
+        if(i.weight > 0 && i.weight < minWeight) minWeight = i.weight;
     });
 
     document.getElementById('lifeCals').innerText = totalCals.toLocaleString();
     document.getElementById('lifeProt').innerText = totalProt.toLocaleString();
-    document.getElementById('lifeLogs').innerText = data.length;
-
-    const days = Object.values(dailySums);
-    days.sort((a, b) => b.cals - a.cals);
-    if (days.length > 0) {
-        document.getElementById('statMaxCals').innerText = days[0].cals;
-        document.getElementById('statMaxCalsDate').innerText = days[0].date;
-    }
-    days.sort((a, b) => b.prot - a.prot);
-    if (days.length > 0) document.getElementById('statMaxProt').innerText = days[0].prot;
-
-    // TOP FOODS (Clickable)
-    const sortedFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const list = document.getElementById('topFoodsList');
-    list.innerHTML = '';
-    sortedFoods.forEach(([name, count]) => {
-        const refId = foodReference[name]; 
-        const li = document.createElement('li');
-        li.className = 'crave-item'; 
-        li.style.borderBottom = "1px solid #eee";
-        li.style.display = "flex";
-        li.style.justifyContent = "space-between";
-        const displayName = name.charAt(0).toUpperCase() + name.slice(1);
-        
-        li.onclick = () => triggerQuickAdd(refId);
-        li.title = "Click to add again";
-
-        li.innerHTML = `<span>${displayName}</span> <span style="font-weight:bold; color:var(--accent);">${count}x +</span>`;
-        list.appendChild(li);
-    });
+    document.getElementById('lifeLogs').innerText = foodLogs.length;
+    document.getElementById('statTotalSteps').innerText = totalSteps.toLocaleString();
+    document.getElementById('statMinWeight').innerText = minWeight === 1000 ? '--' : minWeight;
 }
-
