@@ -19,7 +19,12 @@ const db = getFirestore(app);
 // --- ADMIN CHECK ---
 const urlParams = new URLSearchParams(window.location.search);
 const isAdmin = urlParams.get('mode') === 'admin';
-if (!isAdmin) document.body.classList.add('read-only');
+if (!isAdmin) {
+    document.body.classList.add('read-only');
+    console.log("View Mode");
+} else {
+    console.log("Admin Mode");
+}
 
 // --- STATE ---
 let allLogs = [];
@@ -28,16 +33,15 @@ let viewDate = new Date();
 let selectedFilterDate = new Date();
 let weightChartInstance = null;
 
-// CONSTANTS (For math)
-// Base BMR for 5'10, 200lbs, 26M is roughly ~1950 Sedentary
+// CONSTANTS
 const BASE_BMR = 1950; 
 const KCAL_PER_STEP = 0.04; 
 
 // DOM ELEMENTS
 const foodForm = document.getElementById('foodForm');
-const metricForm = document.getElementById('bodyForm');
-const foodBox = document.getElementById('logForm');
-const metricBox = document.getElementById('metricForm');
+const metricForm = document.getElementById('bodyForm'); // The <form> tag
+const foodBox = document.getElementById('logForm');     // The container div
+const metricBox = document.getElementById('metricForm');// The container div
 
 // --- EVENT LISTENERS ---
 
@@ -45,13 +49,13 @@ const metricBox = document.getElementById('metricForm');
 document.getElementById('toggleFormBtn').addEventListener('click', () => {
     resetForms();
     foodBox.classList.toggle('hidden');
-    metricBox.classList.add('hidden');
+    metricBox.classList.add('hidden'); // Close the other one
 });
 
 document.getElementById('toggleMetricBtn').addEventListener('click', () => {
     resetForms();
     metricBox.classList.toggle('hidden');
-    foodBox.classList.add('hidden');
+    foodBox.classList.add('hidden'); // Close the other one
     // Default metric date to today
     document.getElementById('metricDate').valueAsDate = new Date();
 });
@@ -111,9 +115,7 @@ metricForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const editId = document.getElementById('metricEditId').value;
     
-    // We create a date object from the date picker (YYYY-MM-DD)
-    // We set time to Noon to avoid timezone edge cases
-    const dateInput = document.getElementById('metricDate').value; // String YYYY-MM-DD
+    const dateInput = document.getElementById('metricDate').value; 
     const dateObj = new Date(dateInput + 'T12:00:00');
 
     const entry = {
@@ -137,7 +139,7 @@ onSnapshot(q, (snapshot) => {
         id: doc.id, ...doc.data(), jsDate: doc.data().date.toDate() 
     }));
     
-    // Handle legacy data (add type='food' if missing)
+    // Handle legacy data
     allLogs.forEach(log => {
         if (!log.type) log.type = 'food';
     });
@@ -168,6 +170,7 @@ function calculateStats(data) {
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
         isDayView = true;
+        daysInPeriod = 1;
     } else if (currentView === 'week') {
         title = "This Week";
         const oneWeekAgo = new Date();
@@ -197,27 +200,19 @@ function calculateStats(data) {
     
     const uniqueDays = new Set(foodLogs.map(i => i.jsDate.toDateString())).size || 1;
 
-    // 2. CALCULATE METRICS (Avg Steps, Current Weight)
+    // 2. CALCULATE METRICS
     let totalSteps = 0;
-    let weightSum = 0;
-    let weightCount = 0;
     let latestWeight = null;
 
     metricLogs.forEach(m => {
         totalSteps += m.steps || 0;
-        if (m.weight > 0) {
-            weightSum += m.weight;
-            weightCount++;
-            // Since data is sorted desc, the first weight we find is the latest
-            if (!latestWeight) latestWeight = m.weight; 
-        }
+        if (m.weight > 0 && !latestWeight) latestWeight = m.weight; 
     });
 
     const avgSteps = Math.round(totalSteps / (daysInPeriod || 1));
     const currentWeightDisplay = latestWeight ? latestWeight : "--";
 
-    // 3. TDEE & WEIGHT CHANGE LOGIC
-    // Dynamic TDEE: Base + (AvgSteps * 0.04)
+    // 3. TDEE & WEIGHT CHANGE
     const dynamicTDEE = BASE_BMR + (avgSteps * KCAL_PER_STEP);
     const totalMaintenance = dynamicTDEE * daysInPeriod;
     const deficit = totalMaintenance - totalCals;
@@ -261,7 +256,6 @@ function renderCalendar(data) {
     const firstDayIndex = new Date(year, month, 1).getDay(); 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Aggregate Data by Date
     const dailyData = {};
     data.forEach(item => {
         const key = item.jsDate.toDateString();
@@ -287,7 +281,6 @@ function renderCalendar(data) {
         cell.className = (d.cals > 0 || d.steps > 0) ? 'cal-day has-data' : 'cal-day';
         if (currentView === 'day' && isSameDay(thisDate, selectedFilterDate)) cell.classList.add('selected-day');
 
-        // Content
         let html = `<span class="cal-date">${i}</span>`;
         if (d.cals > 0) html += `<div class="cal-total">${d.cals}</div><div class="cal-sub">P:${d.prot}g</div>`;
         if (d.steps > 0) html += `<div class="cal-steps">👟${(d.steps/1000).toFixed(1)}k</div>`;
@@ -332,7 +325,6 @@ function renderFeed(data) {
                 </div>
             `;
         } else {
-            // METRIC CARD
             card.className = 'food-card metric-card';
             card.innerHTML = `
                 <div style="padding:15px; background:#f0fdf4;">
@@ -426,7 +418,7 @@ function isSameDay(d1, d2) {
            d1.getFullYear() === d2.getFullYear();
 }
 
-// --- STATS PAGE & CHART ---
+// --- STATS PAGE ---
 const mainDash = document.getElementById('mainDashboard');
 const statsDash = document.getElementById('statsDashboard');
 document.getElementById('showStatsBtn').addEventListener('click', () => {
@@ -440,12 +432,10 @@ document.getElementById('backBtn').addEventListener('click', () => {
 });
 
 function updateCharts(data) {
-    // 1. Prepare Data
-    const metrics = data.filter(i => i.type === 'metric' && i.weight > 0).reverse(); // Oldest first
+    const metrics = data.filter(i => i.type === 'metric' && i.weight > 0).reverse(); 
     const dates = metrics.map(m => m.jsDate.toLocaleDateString());
     const weights = metrics.map(m => m.weight);
 
-    // 2. Render Chart
     const ctx = document.getElementById('weightChart').getContext('2d');
     if (weightChartInstance) weightChartInstance.destroy();
     
@@ -465,7 +455,6 @@ function updateCharts(data) {
         options: { responsive: true, maintainAspectRatio: false }
     });
 
-    // 3. Populate other stat cards
     const foodLogs = data.filter(i => i.type === 'food');
     let totalCals = 0, totalProt = 0, totalSteps = 0;
     let minWeight = 1000;
