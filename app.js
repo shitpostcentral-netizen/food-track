@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, doc, query, orderBy, onSnapshot } 
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, query, orderBy, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- PASTE YOUR API KEYS HERE ---
@@ -19,12 +19,7 @@ const db = getFirestore(app);
 // --- ADMIN CHECK ---
 const urlParams = new URLSearchParams(window.location.search);
 const isAdmin = urlParams.get('mode') === 'admin';
-if (!isAdmin) {
-    document.body.classList.add('read-only');
-    console.log("View Mode");
-} else {
-    console.log("Admin Mode");
-}
+if (!isAdmin) document.body.classList.add('read-only');
 
 // --- STATE ---
 let allLogs = [];
@@ -39,9 +34,9 @@ const KCAL_PER_STEP = 0.04;
 
 // DOM ELEMENTS
 const foodForm = document.getElementById('foodForm');
-const metricForm = document.getElementById('bodyForm'); // The <form> tag
-const foodBox = document.getElementById('logForm');     // The container div
-const metricBox = document.getElementById('metricForm');// The container div
+const metricForm = document.getElementById('bodyForm');
+const foodBox = document.getElementById('logForm');
+const metricBox = document.getElementById('metricForm');
 
 // --- EVENT LISTENERS ---
 
@@ -49,14 +44,13 @@ const metricBox = document.getElementById('metricForm');// The container div
 document.getElementById('toggleFormBtn').addEventListener('click', () => {
     resetForms();
     foodBox.classList.toggle('hidden');
-    metricBox.classList.add('hidden'); // Close the other one
+    metricBox.classList.add('hidden');
 });
 
 document.getElementById('toggleMetricBtn').addEventListener('click', () => {
     resetForms();
     metricBox.classList.toggle('hidden');
-    foodBox.classList.add('hidden'); // Close the other one
-    // Default metric date to today
+    foodBox.classList.add('hidden');
     document.getElementById('metricDate').valueAsDate = new Date();
 });
 
@@ -110,11 +104,10 @@ foodForm.addEventListener('submit', async (e) => {
     } catch (err) { console.error(err); }
 });
 
-// 5. SUBMIT METRICS (Steps/Weight)
+// 5. SUBMIT METRICS
 metricForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const editId = document.getElementById('metricEditId').value;
-    
     const dateInput = document.getElementById('metricDate').value; 
     const dateObj = new Date(dateInput + 'T12:00:00');
 
@@ -139,7 +132,6 @@ onSnapshot(q, (snapshot) => {
         id: doc.id, ...doc.data(), jsDate: doc.data().date.toDate() 
     }));
     
-    // Handle legacy data
     allLogs.forEach(log => {
         if (!log.type) log.type = 'food';
     });
@@ -158,7 +150,6 @@ function calculateStats(data) {
     let isDayView = false;
     let daysSinceStart = 1;
 
-    // 1. DETERMINE TRACKING DURATION
     if (data.length > 0) {
         const firstDate = data[data.length - 1].jsDate;
         const diff = Math.abs(now - firstDate);
@@ -167,7 +158,6 @@ function calculateStats(data) {
 
     let daysInPeriod = 1;
 
-    // 2. FILTERING LOGIC
     if (currentView === 'day') {
         title = selectedFilterDate.toDateString();
         filtered = data.filter(item => isSameDay(item.jsDate, selectedFilterDate));
@@ -192,68 +182,48 @@ function calculateStats(data) {
         daysInPeriod = daysSinceStart;
     }
 
-    // 3. SEPARATE LOGS
     const foodLogs = filtered.filter(l => l.type === 'food');
     const metricLogs = filtered.filter(l => l.type === 'metric');
 
-    // 4. CALCULATE FOOD TOTALS
+    // FOOD TOTALS
     let totalCals = 0, totalProt = 0;
     foodLogs.forEach(f => { totalCals += f.cals; totalProt += f.protein; });
     
     const uniqueDays = new Set(foodLogs.map(i => i.jsDate.toDateString())).size || 1;
 
-    // 5. CALCULATE METRICS (Weight & Steps)
+    // METRICS & TDEE LOGIC
     let totalStepsForDisplay = 0;
     let latestWeight = null;
-    let daysWithStepsCount = 0;
+    let daysWithStepLogs = new Set();
     let totalBurnFromSteps = 0;
-    
-    // We use a Set to ensure we don't double-count the same day if you edited it
-    const daysWithStepLogs = new Set();
 
     metricLogs.forEach(m => {
-        // Handle Weight
         if (m.weight > 0 && !latestWeight) latestWeight = m.weight; 
         
-        // Handle Steps
         const dateKey = m.jsDate.toDateString();
         if (m.steps > 0) {
             totalStepsForDisplay += m.steps;
-            
-            // If this is the first time seeing this day in this loop, calculate its burn
             if (!daysWithStepLogs.has(dateKey)) {
                 daysWithStepLogs.add(dateKey);
-                // Specific Burn for this day: 1950 + (Steps * 0.04)
                 totalBurnFromSteps += (BASE_BMR + (m.steps * KCAL_PER_STEP));
             }
         }
     });
 
-    daysWithStepsCount = daysWithStepLogs.size;
-
-    // 6. HYBRID MAINTENANCE CALCULATION (The Fix)
-    // Days WITH steps use the specific calculated burn.
-    // Days WITHOUT steps use the default 2460.
+    const daysWithStepsCount = daysWithStepLogs.size;
     const defaultDaysCount = Math.max(0, daysInPeriod - daysWithStepsCount);
-    
-    // Total Maintenance = (Burn from Step Days) + (Default 2460 * Empty Days)
     const totalMaintenance = totalBurnFromSteps + (defaultDaysCount * 2460);
     
-    // Calculate Deficit
     const deficit = totalMaintenance - totalCals;
     const lbsChange = -(deficit / 3500);
-
-    // 7. DISPLAY CALCULATIONS
-    // Calculate "Effective Average TDEE" just for the label
     const effectiveAvgTDEE = totalMaintenance / (daysInPeriod || 1);
     
     const currentWeightDisplay = latestWeight ? latestWeight : "--";
     const avgSteps = Math.round(totalStepsForDisplay / (daysInPeriod || 1));
 
-    // 8. UPDATE UI
+    // UPDATE UI
     document.getElementById('statTitle').innerText = isDayView ? "Selected Day Cals" : title;
     
-    // Show Daily Goal: If day view has steps, show exact burn. If not, show 2460.
     if (isDayView && daysWithStepsCount > 0) {
         document.getElementById('calGoalDisplay').innerText = `Est. Burn: ${Math.round(totalMaintenance)}`;
     } else if (isDayView) {
@@ -265,7 +235,6 @@ function calculateStats(data) {
     document.getElementById('displayCals').innerText = totalCals.toLocaleString();
     document.getElementById('displayProt').innerText = totalProt.toLocaleString();
     document.getElementById('displayAvgProt').innerText = Math.round(totalProt / (uniqueDays || 1));
-    
     document.getElementById('displaySteps').innerText = isDayView ? totalStepsForDisplay.toLocaleString() : avgSteps.toLocaleString();
     document.getElementById('displayWeight').innerText = currentWeightDisplay;
 
@@ -273,8 +242,6 @@ function calculateStats(data) {
     const sign = lbsChange > 0 ? "+" : "";
     weightEl.innerText = `${sign}${lbsChange.toFixed(2)} lbs`;
     weightEl.style.color = lbsChange > 0 ? "#ef4444" : "#059669";
-    
-    // Update the small text below weight change
     document.getElementById('tdeeDisplay').innerText = `based on ~${Math.round(effectiveAvgTDEE)} TDEE`;
 
     renderFeed(filtered);
@@ -364,10 +331,12 @@ function renderFeed(data) {
                     <div class="action-row">
                         <button class="edit-btn" onclick="triggerEdit('${item.id}')">Edit</button>
                         <button class="relog-btn" onclick="triggerQuickAdd('${item.id}')">Add Again</button>
+                        <button class="edit-btn" style="background:#fee2e2; color:#991b1b;" onclick="deleteLog('${item.id}')">Del</button>
                     </div>
                 </div>
             `;
         } else {
+            // METRIC CARD
             card.className = 'food-card metric-card';
             card.innerHTML = `
                 <div style="padding:15px; background:#f0fdf4;">
@@ -385,6 +354,7 @@ function renderFeed(data) {
                     </div>
                     <div class="action-row">
                         <button class="edit-btn" onclick="triggerMetricEdit('${item.id}')">Edit</button>
+                        <button class="edit-btn" style="background:#fee2e2; color:#991b1b;" onclick="deleteLog('${item.id}')">Delete</button>
                     </div>
                 </div>
             `;
@@ -445,6 +415,18 @@ window.triggerQuickAdd = (id) => {
     window.scrollTo({top:0, behavior:'smooth'});
 };
 
+// NEW: Delete Function
+window.deleteLog = async (id) => {
+    if (confirm("Are you sure you want to delete this log?")) {
+        try {
+            await deleteDoc(doc(db, "logs", id));
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete log.");
+        }
+    }
+};
+
 function resetForms() {
     foodForm.reset();
     metricForm.reset();
@@ -475,13 +457,29 @@ document.getElementById('backBtn').addEventListener('click', () => {
 });
 
 function updateCharts(data) {
-    const metrics = data.filter(i => i.type === 'metric' && i.weight > 0).reverse(); 
+    const metrics = data
+        .filter(i => i.type === 'metric' && i.weight > 0)
+        .sort((a, b) => a.jsDate - b.jsDate); 
+
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    
+    if (weightChartInstance) {
+        weightChartInstance.destroy();
+        weightChartInstance = null;
+    }
+
     const dates = metrics.map(m => m.jsDate.toLocaleDateString());
     const weights = metrics.map(m => m.weight);
 
-    const ctx = document.getElementById('weightChart').getContext('2d');
-    if (weightChartInstance) weightChartInstance.destroy();
-    
+    let minScale = 150; 
+    let maxScale = 250;
+    if (weights.length > 0) {
+        const minW = Math.min(...weights);
+        const maxW = Math.max(...weights);
+        minScale = minW - 10; 
+        maxScale = maxW + 10;
+    }
+
     weightChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -492,10 +490,24 @@ function updateCharts(data) {
                 borderColor: '#059669',
                 backgroundColor: 'rgba(5, 150, 105, 0.1)',
                 tension: 0.3,
-                fill: true
+                fill: true,
+                pointRadius: 5,
+                pointHoverRadius: 7
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            scales: { y: { suggestedMin: minScale, suggestedMax: maxScale } },
+            plugins: {
+                title: {
+                    display: weights.length === 0,
+                    text: 'Log your weight to see the trend line',
+                    font: { size: 14, style: 'italic' },
+                    color: '#999'
+                }
+            }
+        }
     });
 
     const foodLogs = data.filter(i => i.type === 'food');
@@ -515,4 +527,3 @@ function updateCharts(data) {
     document.getElementById('statTotalSteps').innerText = totalSteps.toLocaleString();
     document.getElementById('statMinWeight').innerText = minWeight === 1000 ? '--' : minWeight;
 }
-
